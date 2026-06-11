@@ -1,47 +1,80 @@
-# BettaFish LangGraph 快速开始指南
+# BettaFish-new Python Agent Portfolio 快速开始
 
-## 🚀 5分钟快速体验
+## 5分钟可复现演示路径
+
+默认演示路径不启动实时爬虫，也不要求 Playwright、外部爬虫账号或模型下载。先用确定性样例数据写入 Postgres，再启动 Flask 主控制台，三个 LangGraph Streamlit 子应用会通过 iframe 嵌入。
 
 ### 前置条件
 
 ```bash
-# 确保已安装Python 3.11+
+# Python 3.11+
 python --version
 
-# 确保在项目根目录
+# 项目根目录
 cd E:\111agent\BettaFish-new
 ```
 
-### Step 1: 安装依赖 (2分钟)
+### Step 1: 配置作品集模式
 
 ```bash
-# 方式1: 使用pip
-pip install langgraph>=0.2.28 langgraph-checkpoint-sqlite>=1.0.3
-
-# 方式2: 使用uv (更快)
-uv pip install langgraph langgraph-checkpoint-sqlite
-
-# 验证安装
-python -c "import langgraph; print(f'LangGraph {langgraph.__version__} 已安装')"
+PORTFOLIO_DEMO_MODE=true
+ENABLE_LIVE_CRAWLERS=false
+DB_DIALECT=postgresql
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=bettafish
+DB_PASSWORD=bettafish
+DB_NAME=bettafish
 ```
 
-### Step 2: 启动Streamlit UI (1分钟)
+### Step 2: 初始化数据库与样例数据
 
 ```bash
-# 启动LangGraph版本的UI
-streamlit run SingleEngineApp/insight_engine_langgraph_app.py --server.port 8504
-
-# 浏览器自动打开 http://localhost:8504
+docker compose up -d db
+uv run python -m MindSpider.schema.init_database
+uv run python -m scripts.seed_portfolio_data --reset
 ```
 
-### Step 3: 测试基本功能 (2分钟)
+`sample_data/portfolio_insight_seed.json` 包含 3 个主题、多个平台、正负中性观点和固定时间戳，InsightEngine 会基于这些真实行查询，不再依赖空库生成报告。
 
-**在UI中**:
+### Step 3: 启动主控制台
+
+```bash
+PORTFOLIO_DEMO_MODE=true ENABLE_LIVE_CRAWLERS=false uv run python app.py
+```
+
+访问 `http://127.0.0.1:5000`，点击“保存并启动系统”。主控制台会启动：
+
+- `SingleEngineApp/insight_engine_langgraph_streamlit_app.py`
+- `SingleEngineApp/media_engine_langgraph_streamlit_app.py`
+- `SingleEngineApp/query_engine_langgraph_streamlit_app.py`
+
+### Step 4: 可选爬虫集成
+
+实时爬虫不属于默认面试演示路径。需要接入 MindSpider / MediaCrawler 时再设置：
+
+```bash
+ENABLE_LIVE_CRAWLERS=true
+```
+
+---
+
+## LangGraph 单引擎调试
+
+如果只想调试某一个 LangGraph 子应用，可以直接运行：
+
+```bash
+uv run streamlit run SingleEngineApp/insight_engine_langgraph_streamlit_app.py --server.port 8501
+uv run streamlit run SingleEngineApp/media_engine_langgraph_streamlit_app.py --server.port 8502
+uv run streamlit run SingleEngineApp/query_engine_langgraph_streamlit_app.py --server.port 8503
+```
+
+**在 UI 中**:
 
 1. **新任务模式**
-   - 输入研究主题: `"武汉大学舆情分析"`
-   - 点击 "🎲 生成ID" 获取Thread ID (例如: `insight_20260531_143022`)
-   - 点击 "🚀 开始研究"
+   - 输入研究主题: `"低空物流试点公众反馈"`
+   - 点击生成 ID 获取 Thread ID
+   - 点击开始研究
    - 观察实时进度
 
 2. **测试中断恢复**
@@ -49,8 +82,7 @@ streamlit run SingleEngineApp/insight_engine_langgraph_app.py --server.port 8504
    - 记下Thread ID
    - 切换到 "恢复任务" 模式
    - 输入Thread ID
-   - 点击 "🔄 恢复研究"
-   - 任务从中断处继续！✨
+   - 恢复研究，任务从 checkpoint 继续
 
 ---
 
@@ -239,7 +271,7 @@ cleanup_old_checkpoints(days=7)
 
 **解决方案**:
 ```bash
-pip install langgraph langgraph-checkpoint-sqlite
+uv pip install langgraph langgraph-checkpoint-sqlite
 ```
 
 ### 问题2: Checkpoint文件过大

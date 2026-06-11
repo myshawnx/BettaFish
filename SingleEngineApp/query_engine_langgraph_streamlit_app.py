@@ -72,8 +72,8 @@ def main():
     )
 
     st.title("Query Agent · LangGraph")
-    st.markdown("具备强大网页搜索能力的AI代理 · 支持 checkpoint 断点恢复")
-    st.markdown("广度爬取官方报道与新闻，注重国内外资源相结合理解舆情")
+    st.markdown("外部信息检索 Agent · 支持 StateGraph checkpoint 断点恢复")
+    st.markdown("为作品集 demo 补充公开网页与新闻证据，和 Insight/Postgres 数据形成交叉验证")
 
     # 检查URL参数 (主页通过 ?query=...&auto_search=true 驱动)
     try:

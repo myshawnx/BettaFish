@@ -2,19 +2,14 @@
 
 <img src="static/image/logo_compressed.png" alt="BettaFish Logo" width="100%">
 
-<a href="https://trendshift.io/repositories/15286" target="_blank"><img src="https://trendshift.io/api/badge/repositories/15286" alt="666ghj%2FBettaFish | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
-
 <a href="https://aihubmix.com/?aff=8Ds9" target="_blank"><img src="./static/image/logo_aihubmix.png" alt="666ghj%2FBettaFish | Trendshift" height="40"/></a>&ensp;
 <a href="https://open.anspire.cn/?share_code=3E1FUOUH" target="_blank"><img src="./static/image/logo_anspire.png" alt="666ghj%2FBettaFish | Trendshift" height="40"/></a>
 
-[![GitHub Stars](https://img.shields.io/github/stars/666ghj/BettaFish?style=flat-square)](https://github.com/666ghj/BettaFish/stargazers)
-[![GitHub Watchers](https://img.shields.io/github/watchers/666ghj/BettaFish?style=flat-square)](https://github.com/666ghj/BettaFish/watchers)
-[![GitHub Forks](https://img.shields.io/github/forks/666ghj/BettaFish?style=flat-square)](https://github.com/666ghj/BettaFish/network)
-[![GitHub Issues](https://img.shields.io/github/issues/666ghj/BettaFish?style=flat-square)](https://github.com/666ghj/BettaFish/issues)
-[![GitHub Pull Requests](https://img.shields.io/github/issues-pr/666ghj/BettaFish?style=flat-square)](https://github.com/666ghj/BettaFish/pulls)
+[![GitHub Stars](https://img.shields.io/github/stars/myshawnx/BettaFish?style=flat-square)](https://github.com/myshawnx/BettaFish/stargazers)
+[![GitHub Issues](https://img.shields.io/github/issues/myshawnx/BettaFish?style=flat-square)](https://github.com/myshawnx/BettaFish/issues)
 
-[![GitHub License](https://img.shields.io/github/license/666ghj/BettaFish?style=flat-square)](https://github.com/666ghj/BettaFish/blob/main/LICENSE)
-[![Version](https://img.shields.io/badge/version-v1.2.1-green.svg?style=flat-square)](https://github.com/666ghj/BettaFish)
+[![GitHub License](https://img.shields.io/github/license/myshawnx/BettaFish?style=flat-square)](https://github.com/myshawnx/BettaFish/blob/main/LICENSE)
+[![Portfolio](https://img.shields.io/badge/Python_Agent-Portfolio-green.svg?style=flat-square)](https://github.com/myshawnx/BettaFish)
 [![Docker](https://img.shields.io/badge/Docker-Build-2496ED?style=flat-square&logo=docker&logoColor=white)](https://hub.docker.com/)
 
 
@@ -23,44 +18,23 @@
 
 </div>
 
-> [!IMPORTANT]  
-> 查看我们最新发布的预测引擎：[MiroFish-简洁通用的群体智能引擎，预测万物](https://github.com/666ghj/MiroFish)
-> 
-> <img src="static/image/MiroFish_logo_compressed.jpeg" alt="banner" width="300">
->
-> “数据分析三板斧”全线贯通：我们激动的宣布 MiroFish 正式发布！随着最后一块版图补齐，我们构建了从 BettaFish（数据收集与分析）到 MiroFish（全景预测）的完整链路。至此，从原始数据到智能决策的闭环已成，让预见未来成为可能！
+> [!NOTE]
+> 当前仓库是面向 **Python Agent 开发岗位面试** 的作品集项目。它保留 BettaFish 的多 Agent 业务语境，但默认演示路径已经改为 LangGraph 编排、Postgres 确定性样例数据、NLP/情感分析和论坛主持人协作；实时爬虫被降级为可选集成，默认关闭。
 
 ## ⚡ 项目概述
 
-“**微舆**” 是一个从0实现的创新型 多智能体 舆情分析系统，帮助大家破除信息茧房，还原舆情原貌，预测未来走向，辅助决策。用户只需像聊天一样提出分析需求，智能体开始全自动分析 国内外30+主流社媒 与 数百万条大众评论。
+**BettaFish-new** 是一个基于 LangGraph 的多 Agent 分析平台作品集，重点展示 Python Agent 工程能力，而不是把实时爬虫作为核心卖点。主控制台由 Flask 提供，三个 LangGraph Streamlit 子应用以 iframe 嵌入：Insight Agent 读 Postgres 样例数据做数据洞察，Media Agent 做多模态/网页信息研判，Query Agent 做外部信息检索，Forum Host 负责跨 Agent 讨论主持。
 
-> “微舆”谐音“微鱼”，BettaFish是一种体型很小但非常好斗、漂亮的鱼，它象征着“小而强大，不畏挑战”
+项目默认运行在 `PORTFOLIO_DEMO_MODE=true`、`ENABLE_LIVE_CRAWLERS=false` 下，使用 `sample_data/portfolio_insight_seed.json` 写入 Postgres 的确定性样例数据，避免空库时由 LLM 编造结论。
 
-查看系统以“武汉大学舆情”为例，生成的研究报告：[武汉大学品牌声誉深度分析报告](./final_reports/final_report__20250827_131630.html)
+核心能力：
 
-查看系统以“武汉大学舆情”为例，一次完整运行的视频：[视频-武汉大学品牌声誉深度分析报告](https://www.bilibili.com/video/BV1TH1WBxEWN/?vd_source=da3512187e242ce17dceee4c537ec7a6#reply279744466833)
-
-不仅仅体现在报告质量上，相比同类产品，我们拥有🚀六大优势：
-
-1. **AI驱动的全域监控**：AI爬虫集群7x24小时不间断作业，全面覆盖微博、小红书、抖音、快手等10+国内外关键社媒。不仅实时捕获热点内容，更能下钻至海量用户评论，让您听到最真实、最广泛的大众声音。
-
-2. **超越LLM的复合分析引擎**：我们不仅依赖设计的5类专业Agent，更融合了微调模型、统计模型等中间件。通过多模型协同工作，确保了分析结果的深度、准度与多维视角。
-
-3. **强大的多模态能力**：突破图文限制，能深度解析抖音、快手等短视频内容，并精准提取现代搜索引擎中的天气、日历、股票等结构化多模态信息卡片，让您全面掌握舆情动态。
-
-4. **Agent“论坛”协作机制**：为不同Agent赋予独特的工具集与思维模式，引入辩论主持人模型，通过“论坛”机制进行链式思维碰撞与辩论。这不仅避免了单一模型的思维局限与交流导致的同质化，更催生出更高质量的集体智能与决策支持。
-
-5. **公私域数据无缝融合**：平台不仅分析公开舆情，还提供高安全性的接口，支持您将内部业务数据库与舆情数据无缝集成。打通数据壁垒，为垂直业务提供“外部趋势+内部洞察”的强大分析能力。
-
-6. **轻量化与高扩展性框架**：基于纯Python模块化设计，实现轻量化、一键式部署。代码结构清晰，开发者可轻松集成自定义模型与业务逻辑，实现平台的快速扩展与深度定制。
-
-**始于舆情，而不止于舆情**。“微舆”的目标，是成为驱动一切业务场景的简洁通用的数据分析引擎。
-
-> 举个例子. 你只需简单修改Agent工具集的api参数与prompt，就可以把他变成一个金融领域的市场分析系统
->
-> 附一个比较活跃的L站项目讨论帖：https://linux.do/t/topic/1009280
->
-> 查看L站佬友做的测评 [开源项目(微舆)与manus|minimax|ChatGPT|Perplexity对比](https://linux.do/t/topic/1148040)
+1. **三引擎 LangGraph 编排**：Insight / Media / Query 各自保留独立代码副本，使用 StateGraph、checkpoint 和断点恢复。
+2. **Postgres 数据洞察**：InsightEngine 通过 SQLAlchemy named params 查询样例业务数据，兼容 Postgres，空库/DB 不可用时返回明确空结果。
+3. **NLP 与情感分析集成**：保留情感分析、关键词优化和报告总结链路，模型依赖按需惰性加载。
+4. **论坛主持人 Agent**：ForumEngine 监听三个 Agent 输出，形成主持人引导与跨 Agent 协作记录。
+5. **MCP 化预留**：后续可把搜索洞察、运行 Agent、论坛总结、系统状态包装为 MCP 工具。
+6. **可选爬虫集成**：MindSpider / MediaCrawler 保留为 optional integration，只有 `ENABLE_LIVE_CRAWLERS=true` 时才进入启动路径。
 
 <div align="center">
 <img src="static/image/system_schematic.png" alt="banner" width="800">
@@ -360,11 +334,11 @@ uv venv --python 3.11 # 创建3.11环境
 > 如果跳过了步骤2，weasyprint库可能无法安装，PDF功能可能无法正常使用。
 
 ```bash
-# 基础依赖安装
-pip install -r requirements.txt
-
-# uv版本命令（更快速安装）
+# uv 版本命令（推荐，安装更快）
 uv pip install -r requirements.txt
+
+# pip 版本命令（可选）
+pip install -r requirements.txt
 # 如果不想使用本地情感分析模型（算力需求很小，默认安装cpu版本），可以将该文件中的"机器学习"部分注释掉再执行指令
 ```
 
@@ -421,7 +395,7 @@ INSIGHT_ENGINE_MODEL_NAME=
 conda activate your_conda_name
 
 # 启动主应用即可
-python app.py
+uv run python app.py
 ```
 
 uv 版本启动命令 
@@ -430,7 +404,7 @@ uv 版本启动命令
 .venv\Scripts\activate
 
 # 启动主应用即可
-python app.py
+uv run python app.py
 ```
 
 > 注1：一次运行终止后，streamlit app可能结束异常仍然占用端口，此时搜索占用端口的进程kill掉即可
@@ -443,13 +417,13 @@ python app.py
 
 ```bash
 # 启动QueryEngine
-streamlit run SingleEngineApp/query_engine_streamlit_app.py --server.port 8503
+uv run streamlit run SingleEngineApp/query_engine_streamlit_app.py --server.port 8503
 
 # 启动MediaEngine  
-streamlit run SingleEngineApp/media_engine_streamlit_app.py --server.port 8502
+uv run streamlit run SingleEngineApp/media_engine_streamlit_app.py --server.port 8502
 
 # 启动InsightEngine
-streamlit run SingleEngineApp/insight_engine_streamlit_app.py --server.port 8501
+uv run streamlit run SingleEngineApp/insight_engine_streamlit_app.py --server.port 8501
 ```
 
 #### 6.3 爬虫系统单独使用

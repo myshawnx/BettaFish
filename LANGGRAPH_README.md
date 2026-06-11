@@ -1,31 +1,38 @@
-# BettaFish LangGraph 现代化改造 - 完整交付
+# BettaFish-new LangGraph Agent Portfolio 说明
 
-> **项目**: BettaFish 多agent舆情分析系统现代化升级  
-> **阶段**: Phase 1 - LangGraph改造  
-> **状态**: ✅ 完成  
+> **项目**: Python Agent 岗位作品集
+> **阶段**: Phase 1 - LangGraph 三引擎改造
+> **状态**: 完成
 > **日期**: 2026-05-31
 
 ---
 
 ## 🎯 项目目标
 
-将InsightEngine从命令式架构升级为基于LangGraph的声明式架构，实现：
-- ✅ Checkpoint机制支持断点续传
-- ✅ 状态版本控制
-- ✅ 代码可维护性提升
-- ✅ 100%兼容现有模块
+将 Insight / Media / Query 三个引擎升级为基于 LangGraph 的独立 Agent 实现，并把默认演示路径从实时爬虫改为可复现的作品集 demo：
+
+- StateGraph 编排
+- checkpoint/断点恢复
+- 三引擎独立代码副本
+- Postgres 样例数据驱动 InsightEngine
+- ForumEngine 主持跨 Agent 协作
+- MindSpider / MediaCrawler 仅作为 `ENABLE_LIVE_CRAWLERS=true` 的可选集成
 
 ---
 
 ## 📦 交付清单
 
-### 核心实现文件 (3个)
+### 核心实现文件
 
 | 文件 | 行数 | 功能 |
 |------|------|------|
 | `InsightEngine/langgraph_state.py` | 200 | 状态定义 (TypedDict + Reducer) |
 | `InsightEngine/langgraph_agent.py` | 600 | LangGraph Agent实现 |
-| `SingleEngineApp/insight_engine_langgraph_app.py` | 300 | Streamlit UI集成 |
+| `MediaEngine/langgraph_agent.py` | - | Media Agent LangGraph实现 |
+| `QueryEngine/langgraph_agent.py` | - | Query Agent LangGraph实现 |
+| `SingleEngineApp/*_langgraph_streamlit_app.py` | - | 三个 Streamlit 子应用 |
+| `sample_data/portfolio_insight_seed.json` | - | 确定性 Postgres 样例数据 |
+| `scripts/seed_portfolio_data.py` | - | 样例数据写入脚本 |
 
 ### 文档文件 (4个)
 
@@ -46,27 +53,29 @@
 
 ## 🚀 快速开始
 
-### 1. 安装依赖 (2分钟)
+### 1. 初始化 Postgres demo 数据
 
 ```bash
-pip install langgraph>=0.2.28 langgraph-checkpoint-sqlite>=1.0.3
+docker compose up -d db
+uv run python -m MindSpider.schema.init_database
+uv run python -m scripts.seed_portfolio_data --reset
 ```
 
-### 2. 启动UI (1分钟)
+### 2. 启动主控制台
 
 ```bash
-streamlit run SingleEngineApp/insight_engine_langgraph_app.py --server.port 8504
+PORTFOLIO_DEMO_MODE=true ENABLE_LIVE_CRAWLERS=false uv run python app.py
 ```
 
-### 3. 测试功能 (2分钟)
+访问 `http://127.0.0.1:5000`。Flask 主控制台负责启动并嵌入三个 Streamlit 子应用。
 
-在UI中:
-1. 输入研究主题: "武汉大学舆情分析"
-2. 点击 "🎲 生成ID" 获取Thread ID
-3. 点击 "🚀 开始研究"
-4. 按 `Ctrl+C` 中断任务
-5. 切换到 "恢复任务" 模式
-6. 输入Thread ID并恢复 ✨
+### 3. 单引擎调试
+
+```bash
+uv run streamlit run SingleEngineApp/insight_engine_langgraph_streamlit_app.py --server.port 8501
+uv run streamlit run SingleEngineApp/media_engine_langgraph_streamlit_app.py --server.port 8502
+uv run streamlit run SingleEngineApp/query_engine_langgraph_streamlit_app.py --server.port 8503
+```
 
 ---
 
@@ -287,7 +296,7 @@ streamlit run SingleEngineApp/insight_engine_langgraph_app.py --server.port 8504
 ### 问题1: ImportError: No module named 'langgraph'
 
 ```bash
-pip install langgraph langgraph-checkpoint-sqlite
+uv pip install langgraph langgraph-checkpoint-sqlite
 ```
 
 ### 问题2: 恢复任务失败
@@ -404,7 +413,7 @@ for db_file in checkpoint_dir.glob("*.db"):
 ## 📋 下一步行动
 
 ### 立即 (今天)
-1. 安装依赖: `pip install langgraph langgraph-checkpoint-sqlite`
+1. 安装依赖: `uv pip install langgraph langgraph-checkpoint-sqlite`
 2. 运行测试: `python test_langgraph_implementation.py`
 3. 启动UI: `streamlit run SingleEngineApp/insight_engine_langgraph_app.py`
 

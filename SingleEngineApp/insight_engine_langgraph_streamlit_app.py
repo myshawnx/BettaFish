@@ -44,7 +44,7 @@ from utils.github_issues import error_with_issue_link
 # 节点 -> 中文进度描述 (与图节点名一一对应)
 NODE_DESC = {
     "generate_structure": "正在生成报告结构...",
-    "search_paragraph": "正在检索舆情数据...",
+    "search_paragraph": "正在检索 Postgres 数据...",
     "summarize_paragraph": "正在总结段落...",
     "reflect_paragraph": "正在反思并补充检索...",
     "update_summary": "正在更新段落总结...",
@@ -71,8 +71,8 @@ def main():
     )
 
     st.title("Insight Agent · LangGraph")
-    st.markdown("私有舆情数据库深度分析AI代理 · 支持 checkpoint 断点恢复")
-    st.markdown("24小时全自动从包括微博、知乎、github、酷安等 13个 社媒平台、技术论坛广泛的爬取舆情数据")
+    st.markdown("Postgres 数据洞察 Agent · 支持 StateGraph checkpoint 断点恢复")
+    st.markdown("默认读取作品集样例数据，实时爬虫仅在 ENABLE_LIVE_CRAWLERS=true 时作为可选集成启用")
 
     # 检查URL参数 (主页通过 ?query=...&auto_search=true 驱动)
     try:

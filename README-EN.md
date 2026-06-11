@@ -2,19 +2,14 @@
 
 <img src="static/image/logo_compressed.png" alt="BettaFish Logo" width="100%">
 
-<a href="https://trendshift.io/repositories/15286" target="_blank"><img src="https://trendshift.io/api/badge/repositories/15286" alt="666ghj%2FBettaFish | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
-
 <a href="https://aihubmix.com/?aff=8Ds9" target="_blank"><img src="./static/image/logo_aihubmix.png" alt="666ghj%2FBettaFish | Trendshift" height="40"/></a>&ensp;
 <a href="https://open.anspire.cn/?share_code=3E1FUOUH" target="_blank"><img src="./static/image/logo_anspire.png" alt="666ghj%2FBettaFish | Trendshift" height="40"/></a>
 
-[![GitHub Stars](https://img.shields.io/github/stars/666ghj/BettaFish?style=flat-square)](https://github.com/666ghj/BettaFish/stargazers)
-[![GitHub Watchers](https://img.shields.io/github/watchers/666ghj/BettaFish?style=flat-square)](https://github.com/666ghj/BettaFish/watchers)
-[![GitHub Forks](https://img.shields.io/github/forks/666ghj/BettaFish?style=flat-square)](https://github.com/666ghj/BettaFish/network)
-[![GitHub Issues](https://img.shields.io/github/issues/666ghj/BettaFish?style=flat-square)](https://github.com/666ghj/BettaFish/issues)
-[![GitHub Pull Requests](https://img.shields.io/github/issues-pr/666ghj/BettaFish?style=flat-square)](https://github.com/666ghj/BettaFish/pulls)
+[![GitHub Stars](https://img.shields.io/github/stars/myshawnx/BettaFish?style=flat-square)](https://github.com/myshawnx/BettaFish/stargazers)
+[![GitHub Issues](https://img.shields.io/github/issues/myshawnx/BettaFish?style=flat-square)](https://github.com/myshawnx/BettaFish/issues)
 
-[![GitHub License](https://img.shields.io/github/license/666ghj/BettaFish?style=flat-square)](https://github.com/666ghj/BettaFish/blob/main/LICENSE)
-[![Version](https://img.shields.io/badge/version-v1.2.1-green.svg?style=flat-square)](https://github.com/666ghj/BettaFish)
+[![GitHub License](https://img.shields.io/github/license/myshawnx/BettaFish?style=flat-square)](https://github.com/myshawnx/BettaFish/blob/main/LICENSE)
+[![Portfolio](https://img.shields.io/badge/Python_Agent-Portfolio-green.svg?style=flat-square)](https://github.com/myshawnx/BettaFish)
 [![Docker](https://img.shields.io/badge/Docker-Build-2496ED?style=flat-square&logo=docker&logoColor=white)](https://hub.docker.com/)
 
 
@@ -22,44 +17,23 @@
 
 </div>
 
-> [!IMPORTANT]  
-> Check out our newly released prediction engine: [MiroFish - A Simple and Universal Swarm Intelligence Engine for Predicting Everything](https://github.com/666ghj/MiroFish)
-> 
-> <img src="static/image/MiroFish_logo_compressed.jpeg" alt="banner" width="300">
->
-> The "Data Analysis Three-Step Approach" is now fully connected: We are excited to announce the official release of MiroFish! With the final piece of the puzzle in place, we have built a complete pipeline from BettaFish (data collection and analysis) to MiroFish (panoramic prediction). The closed loop from raw data to intelligent decision-making is now complete, making it possible to foresee the future!
+> [!NOTE]
+> This fork is now positioned as a **Python Agent engineering portfolio**. It keeps the BettaFish multi-agent analysis context, but the default demo path is LangGraph orchestration, deterministic Postgres sample data, NLP/sentiment analysis, and a forum moderator agent. Live crawlers are optional and disabled by default.
 
 ## ⚡ Project Overview
 
-**"BettaFish"** is an innovative multi-agent public opinion analysis system built from scratch. It helps break information cocoons, restore the original public sentiment, predict future trends, and assist decision-making. Users only need to raise analysis needs like chatting; the agents automatically analyze 30+ mainstream social platforms at home and abroad and millions of public comments.
+**BettaFish-new** is a LangGraph-based multi-agent analysis platform for interviews and portfolio review. The Flask console embeds three LangGraph Streamlit apps: Insight Agent reads deterministic Postgres data, Media Agent evaluates multimodal/web material, Query Agent performs external search, and Forum Host moderates cross-agent discussion.
 
-> Betta is a small yet combative and beautiful fish, symbolizing "small but powerful, fearless of challenges".
+The default runtime is `PORTFOLIO_DEMO_MODE=true` and `ENABLE_LIVE_CRAWLERS=false`. The demo uses `sample_data/portfolio_insight_seed.json` to seed reproducible Postgres rows, so InsightEngine can report from real data instead of inventing conclusions against an empty database.
 
-See the system-generated research report on "Wuhan University Public Opinion": [In-depth Analysis Report on Wuhan University's Brand Reputation](./final_reports/final_report__20250827_131630.html)
+Core highlights:
 
-See a complete system run example on "Wuhan University Public Opinion": [Video - In-depth Analysis Report on Wuhan University's Brand Reputation](https://www.bilibili.com/video/BV1TH1WBxEWN/?vd_source=da3512187e242ce17dceee4c537ec7a6#reply279744466833)
-
-Beyond just report quality, compared to similar products, we have 🚀 six major advantages:
-
-1. **AI-Driven Comprehensive Monitoring**: AI crawler clusters operate 24/7 non-stop, comprehensively covering 10+ key domestic and international social media platforms including Weibo, Xiaohongshu, TikTok, Kuaishou, etc. Not only capturing trending content in real-time, but also drilling down to massive user comments, letting you hear the most authentic and widespread public voice.
-
-2. **Composite Analysis Engine Beyond LLM**: We not only rely on 5 types of professionally designed Agents, but also integrate middleware such as fine-tuned models and statistical models. Through multi-model collaborative work, we ensure the depth, accuracy, and multi-dimensional perspective of analysis results.
-
-3. **Powerful Multimodal Capabilities**: Breaking through text and image limitations, capable of deep analysis of short video content from TikTok, Kuaishou, etc., and precisely extracting structured multimodal information cards such as weather, calendar, stocks from modern search engines, giving you comprehensive control over public opinion dynamics.
-
-4. **Agent "Forum" Collaboration Mechanism**: Endowing different Agents with unique toolsets and thinking patterns, introducing a debate moderator model, conducting chain-of-thought collision and debate through the "forum" mechanism. This not only avoids the thinking limitations of single models and homogenization caused by communication, but also catalyzes higher-quality collective intelligence and decision support.
-
-5. **Seamless Integration of Public and Private Domain Data**: The platform not only analyzes public opinion, but also provides high-security interfaces supporting seamless integration of your internal business databases with public opinion data. Breaking through data barriers, providing powerful analysis capabilities of "external trends + internal insights" for vertical businesses.
-
-6. **Lightweight and Highly Extensible Framework**: Based on pure Python modular design, achieving lightweight, one-click deployment. Clear code structure allows developers to easily integrate custom models and business logic, enabling rapid platform expansion and deep customization.
-
-**Starting with public opinion, but not limited to public opinion**. The goal of "WeiYu" is to become a simple and universal data analysis engine that drives all business scenarios.
-
-> For example, you only need to simply modify the API parameters and prompts of the Agent toolset to transform it into a financial market analysis system.
->
-> Here's a relatively active Linux.do project discussion thread: https://linux.do/t/topic/1009280
->
-> Check out the comparison by a Linux.do fellow: [Open Source Project (BettaFish) vs manus|minimax|ChatGPT Comparison](https://linux.do/t/topic/1148040)
+1. **Three independent LangGraph engines**: Insight / Media / Query each keep their own implementation while using StateGraph, checkpointing, and resume support.
+2. **Postgres insight path**: InsightEngine uses SQLAlchemy named params, table/field allowlists, and clear empty results when DB data is missing.
+3. **NLP and sentiment integration**: keyword optimization, sentiment analysis, and report summarization remain available with lazy model loading.
+4. **Forum moderator agent**: ForumEngine listens to agent output and produces moderated collaboration context.
+5. **MCP-ready direction**: search insights, agent runs, forum summaries, and system status can be exposed as MCP tools later.
+6. **Optional crawler integration**: MindSpider / MediaCrawler stay available only when `ENABLE_LIVE_CRAWLERS=true`.
 
 <div align="center">
 <img src="static/image/system_schematic.png" alt="banner" width="800">
@@ -355,11 +329,11 @@ This section contains detailed configuration instructions:[Configure the depende
 > If Step 2 is skipped, the WeasyPrint library may not install correctly, and the PDF functionality may be unavailable.
 
 ```bash
-# Basic dependency installation
-pip install -r requirements.txt
-
-# uv version command (faster installation)
+# uv dependency installation (recommended, faster)
 uv pip install -r requirements.txt
+
+# pip dependency installation (alternative)
+pip install -r requirements.txt
 # If you do not want to use the local sentiment analysis model (which has low computational requirements and defaults to the CPU version), you can comment out the 'Machine Learning' section in this file before executing the command.
 ```
 
@@ -416,7 +390,7 @@ INSIGHT_ENGINE_MODEL_NAME=
 conda activate your_conda_name
 
 # Start main application
-python app.py
+uv run python app.py
 ```
 
 uv version startup command:
@@ -425,7 +399,7 @@ uv version startup command:
 .venv\Scripts\activate
 
 # Start main application
-python app.py
+uv run python app.py
 ```
 
 > Note 1: After a run is terminated, the Streamlit app might not shut down correctly and may still be occupying the port. If this occurs, find the process that is holding the port and kill it.
@@ -438,13 +412,13 @@ Visit http://localhost:5000 to use the complete system
 
 ```bash
 # Start QueryEngine
-streamlit run SingleEngineApp/query_engine_streamlit_app.py --server.port 8503
+uv run streamlit run SingleEngineApp/query_engine_streamlit_app.py --server.port 8503
 
 # Start MediaEngine  
-streamlit run SingleEngineApp/media_engine_streamlit_app.py --server.port 8502
+uv run streamlit run SingleEngineApp/media_engine_streamlit_app.py --server.port 8502
 
 # Start InsightEngine
-streamlit run SingleEngineApp/insight_engine_streamlit_app.py --server.port 8501
+uv run streamlit run SingleEngineApp/insight_engine_streamlit_app.py --server.port 8501
 ```
 
 #### 6.3 Crawler System Standalone Use

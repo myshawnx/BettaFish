@@ -73,9 +73,8 @@ def main():
     )
 
     st.title("Media Agent · LangGraph")
-    st.markdown("具备强大多模态能力的AI代理 · 支持 checkpoint 断点恢复")
-    st.markdown("突破传统文本交流限制，广泛的浏览抖音、快手、小红书的视频、图文、直播")
-    st.markdown("使用现代化搜索引擎提供的诸如日历卡、天气卡、股票卡等多模态结构化信息进一步增强能力")
+    st.markdown("多模态研判 Agent · 支持 StateGraph checkpoint 断点恢复")
+    st.markdown("面向作品集 demo 的网页与多模态信息补充，不依赖默认实时爬虫链路")
 
     # 检查URL参数 (主页通过 ?query=...&auto_search=true 驱动)
     try:
