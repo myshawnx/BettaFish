@@ -1,5 +1,5 @@
 """
-Flask主应用 - 统一管理三个Streamlit应用
+Flask主应用 - Python Agent作品集主控制台，统一管理三个LangGraph Streamlit应用。
 """
 
 import os
@@ -22,7 +22,6 @@ import requests
 from loguru import logger
 import importlib
 from pathlib import Path
-from MindSpider.main import MindSpider
 
 # 导入ReportEngine
 try:
@@ -113,8 +112,46 @@ CONFIG_KEYS = [
     'TAVILY_API_KEY',
     'SEARCH_TOOL_TYPE',
     'BOCHA_WEB_SEARCH_API_KEY',
-    'ANSPIRE_API_KEY'
+    'ANSPIRE_API_KEY',
+    'PORTFOLIO_DEMO_MODE',
+    'ENABLE_LIVE_CRAWLERS'
 ]
+
+
+def _as_bool(value, default=False):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _load_runtime_settings():
+    from config import reload_settings, settings
+    reload_settings()
+    return settings
+
+
+def _database_config_status(settings):
+    required_values = {
+        'host': getattr(settings, 'DB_HOST', None),
+        'user': getattr(settings, 'DB_USER', None),
+        'password': getattr(settings, 'DB_PASSWORD', None),
+        'name': getattr(settings, 'DB_NAME', None),
+    }
+    placeholder_values = {'', 'your_db_host', 'your_db_user', 'your_db_password', 'your_db_name'}
+    configured = all(str(value or '').strip() not in placeholder_values for value in required_values.values())
+    return {
+        'dialect': getattr(settings, 'DB_DIALECT', ''),
+        'host': getattr(settings, 'DB_HOST', ''),
+        'port': getattr(settings, 'DB_PORT', ''),
+        'database': getattr(settings, 'DB_NAME', ''),
+        'user_configured': str(getattr(settings, 'DB_USER', '') or '').strip() not in placeholder_values,
+        'password_configured': bool(getattr(settings, 'DB_PASSWORD', None)),
+        'configured': configured
+    }
 
 
 def _load_config_module():
@@ -135,8 +172,7 @@ def read_config_values():
     """Return the current configuration values that are exposed to the frontend."""
     try:
         # 重新加载配置以获取最新的 Settings 实例
-        from config import reload_settings, settings
-        reload_settings()
+        settings = _load_runtime_settings()
         
         values = {}
         for key in CONFIG_KEYS:
@@ -269,12 +305,30 @@ def initialize_system_components():
     """启动所有依赖组件（Streamlit 子应用、ForumEngine、ReportEngine）。"""
     logs = []
     errors = []
-    
-    spider = MindSpider()
-    if spider.initialize_database():
-        logger.info("数据库初始化成功")
+
+    settings = _load_runtime_settings()
+    live_crawlers_enabled = _as_bool(getattr(settings, 'ENABLE_LIVE_CRAWLERS', False))
+    if live_crawlers_enabled:
+        try:
+            from MindSpider.main import MindSpider
+
+            spider = MindSpider()
+            if spider.initialize_database():
+                logs.append("MindSpider 数据库初始化成功")
+                logger.info("数据库初始化成功")
+            else:
+                msg = "MindSpider 数据库初始化失败"
+                logs.append(msg)
+                errors.append(msg)
+                logger.error(msg)
+        except Exception as exc:  # pragma: no cover - optional integration guard
+            msg = f"MindSpider 可选爬虫初始化异常: {exc}"
+            logs.append(msg)
+            errors.append(msg)
+            logger.exception(msg)
     else:
-        logger.error("数据库初始化失败")
+        logs.append("ENABLE_LIVE_CRAWLERS=false，跳过 MindSpider/MediaCrawler 初始化")
+        logger.info("ENABLE_LIVE_CRAWLERS=false，跳过 MindSpider/MediaCrawler 初始化")
 
     try:
         stop_forum_engine()
@@ -319,13 +373,13 @@ def initialize_system_components():
             if initialize_report_engine():
                 logs.append("ReportEngine 初始化成功")
             else:
-                msg = "ReportEngine 初始化失败"
+                msg = "ReportEngine 初始化失败，已降级为可选报告能力，不影响三引擎作品集启动"
                 logs.append(msg)
-                errors.append(msg)
+                logger.warning(msg)
         except Exception as exc:  # pragma: no cover
-            msg = f"ReportEngine 初始化异常: {exc}"
+            msg = f"ReportEngine 初始化异常，已降级为可选报告能力: {exc}"
             logs.append(msg)
-            errors.append(msg)
+            logger.exception(msg)
 
     if errors:
         cleanup_processes()
@@ -1243,10 +1297,14 @@ def update_config():
 def get_system_status():
     """返回系统启动状态。"""
     state = _get_system_state()
+    settings = _load_runtime_settings()
     return jsonify({
         'success': True,
         'started': state['started'],
-        'starting': state['starting']
+        'starting': state['starting'],
+        'portfolio_demo_mode': _as_bool(getattr(settings, 'PORTFOLIO_DEMO_MODE', True), True),
+        'live_crawlers_enabled': _as_bool(getattr(settings, 'ENABLE_LIVE_CRAWLERS', False)),
+        'database': _database_config_status(settings)
     })
 
 

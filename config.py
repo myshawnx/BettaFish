@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     HOST: str = Field("0.0.0.0", description="BETTAFISH 主机地址，例如 0.0.0.0 或 127.0.0.1")
     PORT: int = Field(5000, description="Flask服务器端口号，默认5000")
 
+    # ================== Portfolio Demo 模式 ====================
+    PORTFOLIO_DEMO_MODE: bool = Field(True, description="作品集演示模式，默认使用可复现样例数据与本地演示路径")
+    ENABLE_LIVE_CRAWLERS: bool = Field(False, description="是否启用 MindSpider/MediaCrawler 实时爬虫集成，默认关闭")
+
     # ====================== 数据库配置 ======================
     DB_DIALECT: str = Field("postgresql", description="数据库类型，可选 mysql 或 postgresql；请与其他连接信息同时配置")
     DB_HOST: str = Field("your_db_host", description="数据库主机，例如localhost 或 127.0.0.1")
