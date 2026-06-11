@@ -13,7 +13,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import Integer, String, BigInteger, Text, ForeignKey
 
 # 使用 models_sa 中的 Base，确保所有表在同一个 metadata 中，外键引用可以正常工作
-from models_sa import Base
+try:
+    from .models_sa import Base
+except ImportError:  # pragma: no cover - 支持从 schema 目录直接执行脚本
+    from models_sa import Base
 
 class BilibiliVideo(Base):
     __tablename__ = "bilibili_video"

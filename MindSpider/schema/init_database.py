@@ -19,11 +19,12 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy import text
 
-from models_sa import Base
-
-# 导入 models_bigdata 以确保所有表类被注册到 Base.metadata
-# models_bigdata 现在也使用 models_sa 的 Base，所以所有表都在同一个 metadata 中
-import models_bigdata  # noqa: F401  # 导入以注册所有表类
+try:
+    from .models_sa import Base
+    from . import models_bigdata  # noqa: F401  # 导入以注册所有表类
+except ImportError:  # pragma: no cover - 支持从 schema 目录直接执行脚本
+    from models_sa import Base
+    import models_bigdata  # noqa: F401  # 导入以注册所有表类
 import sys
 from pathlib import Path
 

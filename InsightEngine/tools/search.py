@@ -69,13 +69,72 @@ class MediaCrawlerDB:
     W_VIEW = 0.1
     W_DANMAKU = 0.5
 
+    TABLE_COLUMNS = {
+        'bilibili_video': {'id', 'title', 'desc', 'source_keyword', 'create_time', 'nickname', 'video_url', 'liked_count', 'video_comment', 'video_share_count', 'video_favorite_count', 'video_coin_count', 'video_danmaku', 'video_play_count'},
+        'bilibili_video_comment': {'id', 'content', 'nickname', 'create_time', 'like_count'},
+        'douyin_aweme': {'id', 'title', 'desc', 'source_keyword', 'create_time', 'nickname', 'aweme_url', 'liked_count', 'comment_count', 'share_count', 'collected_count'},
+        'douyin_aweme_comment': {'id', 'content', 'nickname', 'create_time', 'like_count'},
+        'kuaishou_video': {'id', 'title', 'desc', 'source_keyword', 'create_time', 'nickname', 'video_url', 'liked_count', 'viewd_count'},
+        'kuaishou_video_comment': {'id', 'content', 'nickname', 'create_time', 'sub_comment_count'},
+        'weibo_note': {'id', 'content', 'source_keyword', 'create_time', 'create_date_time', 'nickname', 'note_url', 'liked_count', 'comments_count', 'shared_count'},
+        'weibo_note_comment': {'id', 'content', 'nickname', 'create_time', 'create_date_time', 'comment_like_count', 'sub_comment_count'},
+        'xhs_note': {'id', 'title', 'desc', 'tag_list', 'source_keyword', 'time', 'nickname', 'note_url', 'liked_count', 'collected_count', 'comment_count', 'share_count'},
+        'xhs_note_comment': {'id', 'content', 'nickname', 'create_time', 'like_count', 'sub_comment_count'},
+        'zhihu_content': {'id', 'title', 'desc', 'content_text', 'source_keyword', 'created_time', 'user_nickname', 'content_url', 'voteup_count', 'comment_count'},
+        'zhihu_comment': {'id', 'content', 'user_nickname', 'publish_time', 'like_count', 'sub_comment_count'},
+        'tieba_note': {'id', 'title', 'desc', 'source_keyword', 'publish_time', 'user_nickname', 'note_url', 'total_replay_num'},
+        'tieba_comment': {'id', 'content', 'user_nickname', 'publish_time', 'sub_comment_count', 'note_url'},
+        'daily_news': {'id', 'news_id', 'source_platform', 'title', 'url', 'description', 'extra_info', 'crawl_date', 'rank_position', 'add_ts', 'last_modify_ts'},
+    }
+
+    SEARCH_CONFIGS = {
+        'bilibili_video': {'fields': ['title', 'desc', 'source_keyword'], 'type': 'video', 'time_col': 'create_time', 'time_type': 'sec'},
+        'bilibili_video_comment': {'fields': ['content'], 'type': 'comment', 'time_col': 'create_time', 'time_type': 'sec'},
+        'douyin_aweme': {'fields': ['title', 'desc', 'source_keyword'], 'type': 'video', 'time_col': 'create_time', 'time_type': 'ms'},
+        'douyin_aweme_comment': {'fields': ['content'], 'type': 'comment', 'time_col': 'create_time', 'time_type': 'sec'},
+        'kuaishou_video': {'fields': ['title', 'desc', 'source_keyword'], 'type': 'video', 'time_col': 'create_time', 'time_type': 'ms'},
+        'kuaishou_video_comment': {'fields': ['content'], 'type': 'comment', 'time_col': 'create_time', 'time_type': 'sec'},
+        'weibo_note': {'fields': ['content', 'source_keyword'], 'type': 'note', 'time_col': 'create_date_time', 'time_type': 'str'},
+        'weibo_note_comment': {'fields': ['content'], 'type': 'comment', 'time_col': 'create_date_time', 'time_type': 'str'},
+        'xhs_note': {'fields': ['title', 'desc', 'tag_list', 'source_keyword'], 'type': 'note', 'time_col': 'time', 'time_type': 'ms'},
+        'xhs_note_comment': {'fields': ['content'], 'type': 'comment', 'time_col': 'create_time', 'time_type': 'sec'},
+        'zhihu_content': {'fields': ['title', 'desc', 'content_text', 'source_keyword'], 'type': 'content', 'time_col': 'created_time', 'time_type': 'sec_str'},
+        'zhihu_comment': {'fields': ['content'], 'type': 'comment', 'time_col': 'publish_time', 'time_type': 'sec_str'},
+        'tieba_note': {'fields': ['title', 'desc', 'source_keyword'], 'type': 'note', 'time_col': 'publish_time', 'time_type': 'str'},
+        'tieba_comment': {'fields': ['content'], 'type': 'comment', 'time_col': 'publish_time', 'time_type': 'str'},
+        'daily_news': {'fields': ['title'], 'type': 'news', 'time_col': 'crawl_date', 'time_type': 'date'},
+    }
+
+    PLATFORM_CONFIGS = {
+        'bilibili': ['bilibili_video', 'bilibili_video_comment'],
+        'douyin': ['douyin_aweme', 'douyin_aweme_comment'],
+        'kuaishou': ['kuaishou_video', 'kuaishou_video_comment'],
+        'weibo': ['weibo_note', 'weibo_note_comment'],
+        'xhs': ['xhs_note', 'xhs_note_comment'],
+        'zhihu': ['zhihu_content', 'zhihu_comment'],
+        'tieba': ['tieba_note', 'tieba_comment'],
+    }
+
+    HOT_CONTENT_CONFIGS = [
+        {'table': 'bilibili_video', 'platform': 'bilibili', 'type': 'video', 'title': 'title', 'author': 'nickname', 'url': 'video_url', 'time_col': 'create_time', 'time_type': 'sec', 'metrics': [('liked_count', W_LIKE), ('video_comment', W_COMMENT), ('video_share_count', W_SHARE), ('video_favorite_count', W_SHARE), ('video_coin_count', W_SHARE), ('video_danmaku', W_DANMAKU), ('video_play_count', W_VIEW)]},
+        {'table': 'douyin_aweme', 'platform': 'douyin', 'type': 'video', 'title': 'title', 'author': 'nickname', 'url': 'aweme_url', 'time_col': 'create_time', 'time_type': 'ms', 'metrics': [('liked_count', W_LIKE), ('comment_count', W_COMMENT), ('share_count', W_SHARE), ('collected_count', W_SHARE)]},
+        {'table': 'weibo_note', 'platform': 'weibo', 'type': 'note', 'title': 'content', 'author': 'nickname', 'url': 'note_url', 'time_col': 'create_date_time', 'time_type': 'str', 'metrics': [('liked_count', W_LIKE), ('comments_count', W_COMMENT), ('shared_count', W_SHARE)]},
+        {'table': 'xhs_note', 'platform': 'xhs', 'type': 'note', 'title': 'title', 'author': 'nickname', 'url': 'note_url', 'time_col': 'time', 'time_type': 'ms', 'metrics': [('liked_count', W_LIKE), ('comment_count', W_COMMENT), ('share_count', W_SHARE), ('collected_count', W_SHARE)]},
+        {'table': 'kuaishou_video', 'platform': 'kuaishou', 'type': 'video', 'title': 'title', 'author': 'nickname', 'url': 'video_url', 'time_col': 'create_time', 'time_type': 'ms', 'metrics': [('liked_count', W_LIKE), ('viewd_count', W_VIEW)]},
+        {'table': 'zhihu_content', 'platform': 'zhihu', 'type': 'content', 'title': 'title', 'author': 'user_nickname', 'url': 'content_url', 'time_col': 'created_time', 'time_type': 'sec_str', 'metrics': [('voteup_count', W_LIKE), ('comment_count', W_COMMENT)]},
+    ]
+
     def __init__(self):
         """
         初始化客户端。
         """
-        pass
+        self._database_available: Optional[bool] = None
+        self._last_error_message: Optional[str] = None
         
-    def _execute_query(self, query: str, params: tuple = None) -> List[Dict[str, Any]]:
+    def _execute_query(self, query: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        if self._database_available is False:
+            self._last_error_message = self._last_error_message or "数据库不可用，已返回空结果。"
+            return []
         try:
             # 获取或创建event loop
             try:
@@ -88,11 +147,42 @@ class MediaCrawlerDB:
                 asyncio.set_event_loop(loop)
             
             # 直接运行协程
-            return loop.run_until_complete(fetch_all(query, params))
+            return loop.run_until_complete(fetch_all(query, params or {}))
         
         except Exception as e:
-            logger.exception(f"数据库查询时发生错误: {e}")
+            message = str(e)
+            self._last_error_message = f"数据库不可用或查询失败，已返回空结果: {message}"
+            if self._is_connectivity_error(message):
+                self._database_available = False
+            logger.warning(self._last_error_message)
             return []
+
+    @staticmethod
+    def _is_connectivity_error(message: str) -> bool:
+        lowered = message.lower()
+        return any(
+            token in lowered
+            for token in [
+                "connection refused",
+                "connect call failed",
+                "could not connect",
+                "actively refused",
+                "remote computer refused",
+                "winerror 1225",
+                "远程计算机拒绝",
+            ]
+        )
+
+    def _empty_error(self, results: List[QueryResult]) -> Optional[str]:
+        if results:
+            return None
+        if self._last_error_message:
+            return self._last_error_message
+        return None
+
+    def _begin_tool_query(self) -> None:
+        if self._database_available is not False:
+            self._last_error_message = None
 
     @staticmethod
     def _to_datetime(ts: Any) -> Optional[datetime]:
@@ -107,13 +197,101 @@ class MediaCrawlerDB:
                 return datetime.fromisoformat(ts.split('+')[0].strip())
         except (ValueError, TypeError): return None
 
-    _table_columns_cache = {}
     def _get_table_columns(self, table_name: str) -> List[str]:
-        if table_name in self._table_columns_cache: return self._table_columns_cache[table_name]
-        results = self._execute_query(f"SHOW COLUMNS FROM `{table_name}`")
-        columns = [row['Field'] for row in results] if results else []
-        self._table_columns_cache[table_name] = columns
-        return columns
+        return sorted(self.TABLE_COLUMNS.get(table_name, set()))
+
+    def _is_postgres(self) -> bool:
+        return (settings.DB_DIALECT or "postgresql").lower() in {"postgresql", "postgres"}
+
+    def _safe_limit(self, value: int, default: int) -> int:
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            parsed = default
+        return max(1, min(parsed, 1000))
+
+    def _quote_table(self, table: str) -> str:
+        if table not in self.TABLE_COLUMNS:
+            raise ValueError(f"不允许查询的表: {table}")
+        return f'"{table}"' if self._is_postgres() else f'`{table}`'
+
+    def _quote_column(self, table: str, field: str) -> str:
+        if field not in self.TABLE_COLUMNS.get(table, set()):
+            raise ValueError(f"表 {table} 不允许查询字段: {field}")
+        return f'"{field}"' if self._is_postgres() else f'`{field}`'
+
+    def _text_expr(self, table: str, field: str) -> str:
+        column = self._quote_column(table, field)
+        return f"CAST({column} AS TEXT)" if self._is_postgres() else f"CAST({column} AS CHAR)"
+
+    def _numeric_expr(self, table: str, field: str) -> str:
+        column = self._quote_column(table, field)
+        if self._is_postgres():
+            return f"COALESCE(NULLIF(regexp_replace(CAST({column} AS TEXT), '[^0-9]', '', 'g'), '')::numeric, 0)"
+        return f"COALESCE(CAST({column} AS DECIMAL(20, 2)), 0)"
+
+    def _like_operator(self) -> str:
+        return "ILIKE" if self._is_postgres() else "LIKE"
+
+    def _build_search_clause(self, table: str, fields: List[str], params: Dict[str, Any], prefix: str, search_term: str) -> str:
+        clauses = []
+        for idx, field in enumerate(fields):
+            pname = f"{prefix}_term_{idx}"
+            clauses.append(f"{self._text_expr(table, field)} {self._like_operator()} :{pname}")
+            params[pname] = search_term
+        return " OR ".join(clauses)
+
+    def _time_bounds(self, start_dt: datetime, end_dt: Optional[datetime], time_type: str) -> tuple[Any, Any]:
+        end_dt = end_dt or (datetime.now() + timedelta(days=36500))
+        if time_type == 'sec':
+            return int(start_dt.timestamp()), int(end_dt.timestamp())
+        if time_type in {'ms', 'ms_str'}:
+            return int(start_dt.timestamp() * 1000), int(end_dt.timestamp() * 1000)
+        if time_type == 'sec_str':
+            return str(int(start_dt.timestamp())), str(int(end_dt.timestamp()))
+        if time_type == 'date':
+            return start_dt.date(), end_dt.date()
+        return start_dt.strftime('%Y-%m-%d'), end_dt.strftime('%Y-%m-%d')
+
+    def _build_time_clause(
+        self,
+        table: str,
+        config: Dict[str, Any],
+        params: Dict[str, Any],
+        prefix: str,
+        start_dt: datetime,
+        end_dt: Optional[datetime] = None,
+    ) -> str:
+        time_col = config.get('time_col')
+        if not time_col:
+            return ""
+        time_type = config.get('time_type', 'str')
+        start_value, end_value = self._time_bounds(start_dt, end_dt, time_type)
+        params[f"{prefix}_start"] = start_value
+        params[f"{prefix}_end"] = end_value
+        expr = self._numeric_expr(table, time_col) if time_type in {'sec_str', 'ms_str'} else self._quote_column(table, time_col)
+        return f"{expr} >= :{prefix}_start AND {expr} < :{prefix}_end"
+
+    def _row_to_query_result(
+        self,
+        table: str,
+        content_type: str,
+        row: Dict[str, Any],
+        platform: Optional[str] = None,
+    ) -> QueryResult:
+        content = row.get('title') or row.get('content') or row.get('desc') or row.get('content_text') or ''
+        time_key = row.get('create_time') or row.get('time') or row.get('created_time') or row.get('publish_time') or row.get('create_date_time') or row.get('crawl_date')
+        return QueryResult(
+            platform=platform or row.get('source_platform') or table.split('_')[0],
+            content_type=content_type,
+            title_or_content=content,
+            author_nickname=row.get('nickname') or row.get('user_nickname') or row.get('user_name'),
+            url=row.get('video_url') or row.get('note_url') or row.get('content_url') or row.get('url') or row.get('aweme_url'),
+            publish_time=self._to_datetime(time_key),
+            engagement=self._extract_engagement(row),
+            source_keyword=row.get('source_keyword') or row.get('source_platform'),
+            source_table=table
+        )
 
     def _extract_engagement(self, row: Dict[str, Any]) -> Dict[str, int]:
         """从数据行中提取并统一互动指标"""
@@ -122,8 +300,10 @@ class MediaCrawlerDB:
         for key, potential_cols in mapping.items():
             for col in potential_cols:
                 if col in row and row[col] is not None:
-                    try: engagement[key] = int(row[col])
-                    except (ValueError, TypeError): engagement[key] = 0
+                    try:
+                        engagement[key] = int(float(str(row[col]).strip()))
+                    except (ValueError, TypeError):
+                        engagement[key] = 0
                     break
         return engagement
 
@@ -144,51 +324,50 @@ class MediaCrawlerDB:
         """
         params_for_log = {'time_period': time_period, 'limit': limit}
         logger.info(f"--- TOOL: 查找热点内容 (params: {params_for_log}) ---")
+        self._begin_tool_query()
         
         now = datetime.now()
         start_time = now - timedelta(days={'24h': 1, 'week': 7}.get(time_period, 365))
 
-        # 定义各平台的热度计算SQL片段
-        hotness_formulas = {
-            'bilibili_video': f"(COALESCE(CAST(liked_count AS UNSIGNED), 0) * {self.W_LIKE} + COALESCE(CAST(video_comment AS UNSIGNED), 0) * {self.W_COMMENT} + COALESCE(CAST(video_share_count AS UNSIGNED), 0) * {self.W_SHARE} + COALESCE(CAST(video_favorite_count AS UNSIGNED), 0) * {self.W_SHARE} + COALESCE(CAST(video_coin_count AS UNSIGNED), 0) * {self.W_SHARE} + COALESCE(CAST(video_danmaku AS UNSIGNED), 0) * {self.W_DANMAKU} + COALESCE(CAST(video_play_count AS DECIMAL(20,2)), 0) * {self.W_VIEW})",
-            'douyin_aweme':   f"(COALESCE(CAST(liked_count AS UNSIGNED), 0) * {self.W_LIKE} + COALESCE(CAST(comment_count AS UNSIGNED), 0) * {self.W_COMMENT} + COALESCE(CAST(share_count AS UNSIGNED), 0) * {self.W_SHARE} + COALESCE(CAST(collected_count AS UNSIGNED), 0) * {self.W_SHARE})",
-            'weibo_note':     f"(COALESCE(CAST(liked_count AS UNSIGNED), 0) * {self.W_LIKE} + COALESCE(CAST(comments_count AS UNSIGNED), 0) * {self.W_COMMENT} + COALESCE(CAST(shared_count AS UNSIGNED), 0) * {self.W_SHARE})",
-            'xhs_note':       f"(COALESCE(CAST(liked_count AS UNSIGNED), 0) * {self.W_LIKE} + COALESCE(CAST(comment_count AS UNSIGNED), 0) * {self.W_COMMENT} + COALESCE(CAST(share_count AS UNSIGNED), 0) * {self.W_SHARE} + COALESCE(CAST(collected_count AS UNSIGNED), 0) * {self.W_SHARE})",
-            'kuaishou_video': f"(COALESCE(CAST(liked_count AS UNSIGNED), 0) * {self.W_LIKE} + COALESCE(CAST(viewd_count AS DECIMAL(20,2)), 0) * {self.W_VIEW})",
-            'zhihu_content':  f"(COALESCE(CAST(voteup_count AS UNSIGNED), 0) * {self.W_LIKE} + COALESCE(CAST(comment_count AS UNSIGNED), 0) * {self.W_COMMENT})",
-        }
+        safe_limit = self._safe_limit(limit, settings.DEFAULT_SEARCH_HOT_CONTENT_LIMIT)
+        formatted_results = []
+        for idx, config in enumerate(self.HOT_CONTENT_CONFIGS):
+            table = config['table']
+            params = {'limit': safe_limit}
+            time_clause = self._build_time_clause(table, config, params, f"hot_{idx}", start_time, now)
+            formula = " + ".join(
+                f"({self._numeric_expr(table, field)} * {weight})"
+                for field, weight in config['metrics']
+            ) or "0"
+            source_expr = self._text_expr(table, 'source_keyword') if 'source_keyword' in self.TABLE_COLUMNS[table] else "NULL"
+            query = (
+                f"SELECT *, {self._text_expr(table, config['title'])} AS result_title, "
+                f"{self._text_expr(table, config['author'])} AS result_author, "
+                f"{self._text_expr(table, config['url'])} AS result_url, "
+                f"{self._text_expr(table, config['time_col'])} AS result_ts, "
+                f"{source_expr} AS result_source_keyword, "
+                f"({formula}) AS hotness_score "
+                f"FROM {self._quote_table(table)} "
+                f"WHERE {time_clause} "
+                f"ORDER BY hotness_score DESC LIMIT :limit"
+            )
+            for row in self._execute_query(query, params):
+                formatted_results.append(QueryResult(
+                    platform=config['platform'],
+                    content_type=config['type'],
+                    title_or_content=row.get('result_title') or '',
+                    author_nickname=row.get('result_author'),
+                    url=row.get('result_url'),
+                    publish_time=self._to_datetime(row.get('result_ts')),
+                    engagement=self._extract_engagement(row),
+                    hotness_score=float(row.get('hotness_score') or 0.0),
+                    source_keyword=row.get('result_source_keyword'),
+                    source_table=table
+                ))
 
-        all_queries, params = [], []
-        for table, formula in hotness_formulas.items():
-            time_filter_sql, time_filter_param = "", None
-            if table == 'weibo_note': time_filter_sql, time_filter_param = "`create_date_time` >= %s", start_time.strftime('%Y-%m-%d %H:%M:%S')
-            elif table in ['kuaishou_video', 'xhs_note', 'douyin_aweme']: time_col = 'time' if table == 'xhs_note' else 'create_time'; time_filter_sql, time_filter_param = f"`{time_col}` >= %s", str(int(start_time.timestamp() * 1000))
-            elif table == 'zhihu_content': time_filter_sql, time_filter_param = "CAST(`created_time` AS UNSIGNED) >= %s", str(int(start_time.timestamp()))
-            else: time_filter_sql, time_filter_param = "`create_time` >= %s", str(int(start_time.timestamp()))
-
-            content_type = 'note' if table in ['weibo_note', 'xhs_note'] else 'content' if table == 'zhihu_content' else 'video'
-            query_template = "SELECT '{platform}' as p, '{type}' as t, {title} as title, {author} as author, {url} as url, {ts} as ts, {formula} as hotness_score, source_keyword, '{tbl}' as tbl FROM `{tbl}` WHERE {time_filter}"
-            
-            field_subs = {'platform': table.split('_')[0], 'type': content_type, 'title': 'title', 'author': 'nickname', 'url': 'video_url', 'ts': 'create_time', 'formula': formula, 'tbl': table, 'time_filter': time_filter_sql}
-            if table == 'weibo_note': field_subs.update({'title': 'content', 'url': 'note_url', 'ts': 'create_date_time'})
-            elif table == 'xhs_note': field_subs.update({'ts': 'time', 'url': 'note_url'})
-            elif table == 'zhihu_content': field_subs.update({'author': 'user_nickname', 'url': 'content_url', 'ts': 'created_time'})
-            elif table == 'douyin_aweme': field_subs.update({'url': 'aweme_url'})
-
-            all_queries.append(query_template.format(**field_subs))
-            params.append(time_filter_param)
-        
-        final_query = f"({' ) UNION ALL ( '.join(all_queries)}) ORDER BY hotness_score DESC LIMIT %s"
-        raw_results = self._execute_query(final_query, tuple(params) + (limit,))
-
-        formatted_results = [QueryResult(platform=r['p'], content_type=r['t'], title_or_content=r['title'], author_nickname=r.get('author'), url=r['url'], publish_time=self._to_datetime(r['ts']), engagement=self._extract_engagement(r), hotness_score=r.get('hotness_score', 0.0), source_keyword=r.get('source_keyword'), source_table=r['tbl']) for r in raw_results]
-        return DBResponse("search_hot_content", params_for_log, results=formatted_results, results_count=len(formatted_results))    
-
-    def _wrap_query_field_with_dialect(self, field: str) -> str:
-        """根据数据库方言包装SQL查询"""
-        if settings.DB_DIALECT == 'postgresql':
-            return f'"{field}"'
-        return f'`{field}`'
+        formatted_results.sort(key=lambda item: item.hotness_score, reverse=True)
+        formatted_results = formatted_results[:safe_limit]
+        return DBResponse("search_hot_content", params_for_log, results=formatted_results, results_count=len(formatted_results), error_message=self._empty_error(formatted_results))
 
     def search_topic_globally(self, topic: str, limit_per_table: int = 100) -> DBResponse:
         """
@@ -203,35 +382,21 @@ class MediaCrawlerDB:
         """
         params_for_log = {'topic': topic, 'limit_per_table': limit_per_table}
         logger.info(f"--- TOOL: 全局话题搜索 (params: {params_for_log}) ---")
+        self._begin_tool_query()
         
         search_term, all_results = f"%{topic}%", []
-        search_configs = { 'bilibili_video': {'fields': ['title', 'desc', 'source_keyword'], 'type': 'video'}, 'bilibili_video_comment': {'fields': ['content'], 'type': 'comment'}, 'douyin_aweme': {'fields': ['title', 'desc', 'source_keyword'], 'type': 'video'}, 'douyin_aweme_comment': {'fields': ['content'], 'type': 'comment'}, 'kuaishou_video': {'fields': ['title', 'desc', 'source_keyword'], 'type': 'video'}, 'kuaishou_video_comment': {'fields': ['content'], 'type': 'comment'}, 'weibo_note': {'fields': ['content', 'source_keyword'], 'type': 'note'}, 'weibo_note_comment': {'fields': ['content'], 'type': 'comment'}, 'xhs_note': {'fields': ['title', 'desc', 'tag_list', 'source_keyword'], 'type': 'note'}, 'xhs_note_comment': {'fields': ['content'], 'type': 'comment'}, 'zhihu_content': {'fields': ['title', 'desc', 'content_text', 'source_keyword'], 'type': 'content'}, 'zhihu_comment': {'fields': ['content'], 'type': 'comment'}, 'tieba_note': {'fields': ['title', 'desc', 'source_keyword'], 'type': 'note'}, 'tieba_comment': {'fields': ['content'], 'type': 'comment'}, 'daily_news': {'fields': ['title'], 'type': 'news'}, }
-        
-        for table, config in search_configs.items():
-            param_dict = {}
-            where_clauses = []
-            for idx, field in enumerate(config['fields']):
-                pname = f"term_{idx}"
-                where_clauses.append(f'{self._wrap_query_field_with_dialect(field)} LIKE :{pname}')
-                param_dict[pname] = search_term
-            param_dict['limit'] = limit_per_table
-            where_clause = " OR ".join(where_clauses)
-            query = f'SELECT * FROM {self._wrap_query_field_with_dialect(table)} WHERE {where_clause} ORDER BY id DESC LIMIT :limit'
-            raw_results = self._execute_query(query, param_dict)
-            for row in raw_results:
-                content = (row.get('title') or row.get('content') or row.get('desc') or row.get('content_text', ''))
-                time_key = row.get('create_time') or row.get('time') or row.get('created_time') or row.get('publish_time') or row.get('crawl_date')
-                all_results.append(QueryResult(
-                    platform=table.split('_')[0], content_type=config['type'],
-                    title_or_content=content if content else '',
-                    author_nickname=row.get('nickname') or row.get('user_nickname') or row.get('user_name'),
-                    url=row.get('video_url') or row.get('note_url') or row.get('content_url') or row.get('url') or row.get('aweme_url'),
-                    publish_time=self._to_datetime(time_key),
-                    engagement=self._extract_engagement(row),
-                    source_keyword=row.get('source_keyword'),
-                    source_table=table
-                ))
-        return DBResponse("search_topic_globally", params_for_log, results=all_results, results_count=len(all_results))
+        safe_limit = self._safe_limit(limit_per_table, settings.DEFAULT_SEARCH_TOPIC_GLOBALLY_LIMIT_PER_TABLE)
+        for idx, (table, config) in enumerate(self.SEARCH_CONFIGS.items()):
+            params = {'limit': safe_limit}
+            where_clause = self._build_search_clause(table, config['fields'], params, f"global_{idx}", search_term)
+            query = (
+                f"SELECT * FROM {self._quote_table(table)} "
+                f"WHERE {where_clause} "
+                f"ORDER BY {self._quote_column(table, 'id')} DESC LIMIT :limit"
+            )
+            for row in self._execute_query(query, params):
+                all_results.append(self._row_to_query_result(table, config['type'], row))
+        return DBResponse("search_topic_globally", params_for_log, results=all_results, results_count=len(all_results), error_message=self._empty_error(all_results))
 
     def search_topic_by_date(self, topic: str, start_date: str, end_date: str, limit_per_table: int = 100) -> DBResponse:
         """
@@ -248,6 +413,7 @@ class MediaCrawlerDB:
         """
         params_for_log = {'topic': topic, 'start_date': start_date, 'end_date': end_date, 'limit_per_table': limit_per_table}
         logger.info(f"--- TOOL: 按日期搜索话题 (params: {params_for_log}) ---")
+        self._begin_tool_query()
         
         try:
             start_dt, end_dt = datetime.strptime(start_date, '%Y-%m-%d'), datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
@@ -255,38 +421,20 @@ class MediaCrawlerDB:
             return DBResponse("search_topic_by_date", params_for_log, error_message="日期格式错误，请使用 'YYYY-MM-DD' 格式。")
         
         search_term, all_results = f"%{topic}%", []
-        search_configs = {
-            'bilibili_video': {'fields': ['title', 'desc', 'source_keyword'], 'type': 'video', 'time_col': 'create_time', 'time_type': 'sec'}, 'douyin_aweme': {'fields': ['title', 'desc', 'source_keyword'], 'type': 'video', 'time_col': 'create_time', 'time_type': 'ms'},
-            'kuaishou_video': {'fields': ['title', 'desc', 'source_keyword'], 'type': 'video', 'time_col': 'create_time', 'time_type': 'ms'}, 'weibo_note': {'fields': ['content', 'source_keyword'], 'type': 'note', 'time_col': 'create_date_time', 'time_type': 'str'},
-            'xhs_note': {'fields': ['title', 'desc', 'tag_list', 'source_keyword'], 'type': 'note', 'time_col': 'time', 'time_type': 'ms'}, 'zhihu_content': {'fields': ['title', 'desc', 'content_text', 'source_keyword'], 'type': 'content', 'time_col': 'created_time', 'time_type': 'sec_str'},
-            'tieba_note': {'fields': ['title', 'desc', 'source_keyword'], 'type': 'note', 'time_col': 'publish_time', 'time_type': 'str'}, 'daily_news': {'fields': ['title'], 'type': 'news', 'time_col': 'crawl_date', 'time_type': 'date_str'},
-        }
-
-        for table, config in search_configs.items():
-            param_dict = {}
-            where_clauses = []
-            for idx, field in enumerate(config['fields']):
-                pname = f"term_{idx}"
-                where_clauses.append(f'{self._wrap_query_field_with_dialect(field)} LIKE :{pname}')
-                param_dict[pname] = search_term
-            param_dict['limit'] = limit_per_table
-            where_clause = ' OR '.join(where_clauses)
-            query = f'SELECT * FROM {self._wrap_query_field_with_dialect(table)} WHERE {where_clause} ORDER BY id DESC LIMIT :limit'
-            raw_results = self._execute_query(query, param_dict)
-            for row in raw_results:
-                content = (row.get('title') or row.get('content') or row.get('desc') or row.get('content_text', ''))
-                time_key = row.get('create_time') or row.get('time') or row.get('created_time') or row.get('publish_time') or row.get('crawl_date')
-                all_results.append(QueryResult(
-                    platform=table.split('_')[0], content_type=config['type'],
-                    title_or_content=content if content else '',
-                    author_nickname=row.get('nickname') or row.get('user_nickname') or row.get('user_name'),
-                    url=row.get('video_url') or row.get('note_url') or row.get('content_url') or row.get('url') or row.get('aweme_url'),
-                    publish_time=self._to_datetime(time_key),
-                    engagement=self._extract_engagement(row),
-                    source_keyword=row.get('source_keyword'),
-                    source_table=table
-                ))
-        return DBResponse("search_topic_by_date", params_for_log, results=all_results, results_count=len(all_results))
+        safe_limit = self._safe_limit(limit_per_table, settings.DEFAULT_SEARCH_TOPIC_BY_DATE_LIMIT_PER_TABLE)
+        for idx, (table, config) in enumerate(self.SEARCH_CONFIGS.items()):
+            params = {'limit': safe_limit}
+            topic_clause = self._build_search_clause(table, config['fields'], params, f"date_{idx}", search_term)
+            time_clause = self._build_time_clause(table, config, params, f"date_{idx}", start_dt, end_dt)
+            where_clause = f"({topic_clause}) AND ({time_clause})" if time_clause else topic_clause
+            query = (
+                f"SELECT * FROM {self._quote_table(table)} "
+                f"WHERE {where_clause} "
+                f"ORDER BY {self._quote_column(table, 'id')} DESC LIMIT :limit"
+            )
+            for row in self._execute_query(query, params):
+                all_results.append(self._row_to_query_result(table, config['type'], row))
+        return DBResponse("search_topic_by_date", params_for_log, results=all_results, results_count=len(all_results), error_message=self._empty_error(all_results))
         
     def get_comments_for_topic(self, topic: str, limit: int = 500) -> DBResponse:
         """
@@ -301,29 +449,47 @@ class MediaCrawlerDB:
         """
         params_for_log = {'topic': topic, 'limit': limit}
         logger.info(f"--- TOOL: 获取话题评论 (params: {params_for_log}) ---")
+        self._begin_tool_query()
         
         search_term = f"%{topic}%"
+        safe_limit = self._safe_limit(limit, settings.DEFAULT_GET_COMMENTS_FOR_TOPIC_LIMIT)
         comment_tables = ['bilibili_video_comment', 'douyin_aweme_comment', 'kuaishou_video_comment', 'weibo_note_comment', 'xhs_note_comment', 'zhihu_comment', 'tieba_comment']
-        
-        all_queries = []
-        for table in comment_tables:
+        formatted = []
+
+        for idx, table in enumerate(comment_tables):
             cols = self._get_table_columns(table)
             author_col = 'user_nickname' if 'user_nickname' in cols else 'nickname'
             like_col = 'comment_like_count' if 'comment_like_count' in cols else 'like_count' if 'like_count' in cols else None
             time_col = 'publish_time' if 'publish_time' in cols else 'create_date_time' if 'create_date_time' in cols else 'create_time'
-            like_select = f"`{like_col}` as likes" if like_col else "'0' as likes"
-            
-            query = (f"SELECT '{table.split('_')[0]}' as platform, `content`, `{author_col}` as author, "
-                     f"`{time_col}` as ts, {like_select}, '{table}' as source_table "
-                     f"FROM `{table}` WHERE `content` LIKE %s")
-            all_queries.append(query)
+            like_select = self._text_expr(table, like_col) if like_col else "'0'"
+            params = {f"comment_{idx}_term": search_term, 'limit': safe_limit}
+            query = (
+                f"SELECT {self._text_expr(table, 'content')} AS result_content, "
+                f"{self._text_expr(table, author_col)} AS result_author, "
+                f"{self._text_expr(table, time_col)} AS result_ts, "
+                f"{like_select} AS result_likes "
+                f"FROM {self._quote_table(table)} "
+                f"WHERE {self._text_expr(table, 'content')} {self._like_operator()} :comment_{idx}_term "
+                f"ORDER BY {self._quote_column(table, 'id')} DESC LIMIT :limit"
+            )
+            for row in self._execute_query(query, params):
+                try:
+                    likes = int(float(str(row.get('result_likes') or 0)))
+                except (TypeError, ValueError):
+                    likes = 0
+                formatted.append(QueryResult(
+                    platform=table.split('_')[0],
+                    content_type='comment',
+                    title_or_content=row.get('result_content') or '',
+                    author_nickname=row.get('result_author'),
+                    publish_time=self._to_datetime(row.get('result_ts')),
+                    engagement={'likes': likes},
+                    source_table=table
+                ))
 
-        final_query = f"({' ) UNION ALL ( '.join(all_queries)}) ORDER BY ts DESC LIMIT %s"
-        params = (search_term,) * len(comment_tables) + (limit,)
-        raw_results = self._execute_query(final_query, params)
-        
-        formatted = [QueryResult(platform=r['platform'], content_type='comment', title_or_content=r['content'], author_nickname=r['author'], publish_time=self._to_datetime(r['ts']), engagement={'likes': int(r['likes']) if str(r['likes']).isdigit() else 0}, source_table=r['source_table']) for r in raw_results]
-        return DBResponse("get_comments_for_topic", params_for_log, results=formatted, results_count=len(formatted))
+        formatted.sort(key=lambda item: item.publish_time or datetime.min, reverse=True)
+        formatted = formatted[:safe_limit]
+        return DBResponse("get_comments_for_topic", params_for_log, results=formatted, results_count=len(formatted), error_message=self._empty_error(formatted))
 
     def search_topic_on_platform(
         self,
@@ -348,16 +514,13 @@ class MediaCrawlerDB:
         """
         params_for_log = {'platform': platform, 'topic': topic, 'start_date': start_date, 'end_date': end_date, 'limit': limit}
         logger.info(f"--- TOOL: 平台定向搜索 (params: {params_for_log}) ---")
+        self._begin_tool_query()
 
-        all_configs = { 'bilibili': [{'table': 'bilibili_video', 'fields': ['title', 'desc', 'source_keyword'], 'type': 'video', 'time_col': 'create_time', 'time_type': 'sec'}, {'table': 'bilibili_video_comment', 'fields': ['content'], 'type': 'comment'}], 'douyin': [{'table': 'douyin_aweme', 'fields': ['title', 'desc', 'source_keyword'], 'type': 'video', 'time_col': 'create_time', 'time_type': 'ms'}, {'table': 'douyin_aweme_comment', 'fields': ['content'], 'type': 'comment'}], 'kuaishou': [{'table': 'kuaishou_video', 'fields': ['title', 'desc', 'source_keyword'], 'type': 'video', 'time_col': 'create_time', 'time_type': 'ms'}, {'table': 'kuaishou_video_comment', 'fields': ['content'], 'type': 'comment'}], 'weibo': [{'table': 'weibo_note', 'fields': ['content', 'source_keyword'], 'type': 'note', 'time_col': 'create_date_time', 'time_type': 'str'}, {'table': 'weibo_note_comment', 'fields': ['content'], 'type': 'comment'}], 'xhs': [{'table': 'xhs_note', 'fields': ['title', 'desc', 'tag_list', 'source_keyword'], 'type': 'note', 'time_col': 'time', 'time_type': 'ms'}, {'table': 'xhs_note_comment', 'fields': ['content'], 'type': 'comment'}], 'zhihu': [{'table': 'zhihu_content', 'fields': ['title', 'desc', 'content_text', 'source_keyword'], 'type': 'content', 'time_col': 'created_time', 'time_type': 'sec_str'}, {'table': 'zhihu_comment', 'fields': ['content'], 'type': 'comment'}], 'tieba': [{'table': 'tieba_note', 'fields': ['title', 'desc', 'source_keyword'], 'type': 'note', 'time_col': 'publish_time', 'time_type': 'str'}, {'table': 'tieba_comment', 'fields': ['content'], 'type': 'comment'}] }
-        
-        if platform not in all_configs:
+        if platform not in self.PLATFORM_CONFIGS:
             return DBResponse("search_topic_on_platform", params_for_log, error_message=f"不支持的平台: {platform}")
 
         search_term, all_results = f"%{topic}%", []
-        platform_configs = all_configs[platform]
-
-        time_clause, time_params_tuple = "", ()
+        safe_limit = self._safe_limit(limit, settings.DEFAULT_SEARCH_TOPIC_ON_PLATFORM_LIMIT)
         if start_date and end_date:
             try:
                 start_dt, end_dt = datetime.strptime(start_date, '%Y-%m-%d'), datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
@@ -366,35 +529,26 @@ class MediaCrawlerDB:
         else:
             start_dt, end_dt = None, None
 
-        for config in platform_configs:
-            table = config['table']
-            topic_clause = " OR ".join([f"`{field}` LIKE %s" for field in config['fields']])
-            query = f"SELECT * FROM `{table}` WHERE {topic_clause}"
-            params = [search_term] * len(config['fields'])
+        for idx, table in enumerate(self.PLATFORM_CONFIGS[platform]):
+            config = self.SEARCH_CONFIGS[table]
+            params = {'limit': safe_limit}
+            topic_clause = self._build_search_clause(table, config['fields'], params, f"platform_{idx}", search_term)
+            where_clause = topic_clause
 
-            if start_dt and end_dt and 'time_col' in config:
-                time_col, time_type = config['time_col'], config['time_type']
-                if time_type == 'sec': t_params = (int(start_dt.timestamp()), int(end_dt.timestamp()))
-                elif time_type == 'ms': t_params = (int(start_dt.timestamp() * 1000), int(end_dt.timestamp() * 1000))
-                elif time_type in ['str', 'date_str']: t_params = (start_dt.strftime('%Y-%m-%d'), end_dt.strftime('%Y-%m-%d'))
-                else: t_params = (str(int(start_dt.timestamp())), str(int(end_dt.timestamp())))
-                
-                t_clause = f"`{time_col}` >= %s AND `{time_col}` < %s"
-                if table == 'zhihu_content': t_clause = f"CAST(`{time_col}` AS UNSIGNED) >= %s AND CAST(`{time_col}` AS UNSIGNED) < %s"
-                
-                query += f" AND ({t_clause})"
-                params.extend(t_params)
+            if start_dt and end_dt:
+                time_clause = self._build_time_clause(table, config, params, f"platform_{idx}", start_dt, end_dt)
+                if time_clause:
+                    where_clause = f"({topic_clause}) AND ({time_clause})"
 
-            query += f" ORDER BY id DESC LIMIT %s"
-            params.append(limit)
-
-            raw_results = self._execute_query(query, tuple(params))
-            for row in raw_results:
-                content = (row.get('title') or row.get('content') or row.get('desc') or row.get('content_text', ''))
-                time_key = config.get('time_col') and row.get(config.get('time_col'))
-                all_results.append(QueryResult(platform=platform, content_type=config['type'], title_or_content=content if content else '', author_nickname=row.get('nickname') or row.get('user_nickname'), url=row.get('video_url') or row.get('note_url') or row.get('content_url') or row.get('url') or row.get('aweme_url'), publish_time=self._to_datetime(time_key), engagement=self._extract_engagement(row), source_keyword=row.get('source_keyword'), source_table=table))
+            query = (
+                f"SELECT * FROM {self._quote_table(table)} "
+                f"WHERE {where_clause} "
+                f"ORDER BY {self._quote_column(table, 'id')} DESC LIMIT :limit"
+            )
+            for row in self._execute_query(query, params):
+                all_results.append(self._row_to_query_result(table, config['type'], row, platform=platform))
         
-        return DBResponse("search_topic_on_platform", params_for_log, results=all_results, results_count=len(all_results))
+        return DBResponse("search_topic_on_platform", params_for_log, results=all_results, results_count=len(all_results), error_message=self._empty_error(all_results))
 
 # --- 3. 测试与使用示例 ---
 def print_response_summary(response: DBResponse):
