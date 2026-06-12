@@ -31,9 +31,10 @@ Core highlights:
 1. **Three independent LangGraph engines**: Insight / Media / Query each keep their own implementation while using StateGraph, checkpointing, and resume support.
 2. **Postgres insight path**: InsightEngine uses SQLAlchemy named params, table/field allowlists, and clear empty results when DB data is missing.
 3. **NLP and sentiment integration**: keyword optimization, sentiment analysis, and report summarization remain available with lazy model loading.
-4. **Forum moderator agent**: ForumEngine listens to agent output and produces moderated collaboration context.
-5. **MCP-ready direction**: search insights, agent runs, forum summaries, and system status can be exposed as MCP tools later.
+4. **Structured forum moderator agent**: ForumEngine listens to agent output and, beyond the natural-language host speech, emits a deterministic verdict (topic / risk_level / action / rationale). It falls back to rules without an API key and is exposed via `GET /api/forum/moderator/status`.
+5. **MCP tool wrapping**: `MCPServer` wraps system status, forum status, insight search, and demo topics as unit-testable tool functions plus an optional MCP server (`uv run python -m MCPServer.server --list`); the `mcp` SDK is an optional enhancement.
 6. **Optional crawler integration**: MindSpider / MediaCrawler stay available only when `ENABLE_LIVE_CRAWLERS=true`.
+7. **No-key CI baseline**: `.github/workflows/ci.yml` runs compileall and the no-key test suite without any key, live crawler, or external database, keeping the portfolio reproducible.
 
 <div align="center">
 <img src="static/image/system_schematic.png" alt="banner" width="800">

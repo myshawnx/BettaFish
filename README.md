@@ -32,9 +32,10 @@
 1. **三引擎 LangGraph 编排**：Insight / Media / Query 各自保留独立代码副本，使用 StateGraph、checkpoint 和断点恢复。
 2. **Postgres 数据洞察**：InsightEngine 通过 SQLAlchemy named params 查询样例业务数据，兼容 Postgres，空库/DB 不可用时返回明确空结果。
 3. **NLP 与情感分析集成**：保留情感分析、关键词优化和报告总结链路，模型依赖按需惰性加载。
-4. **论坛主持人 Agent**：ForumEngine 监听三个 Agent 输出，形成主持人引导与跨 Agent 协作记录。
-5. **MCP 化预留**：后续可把搜索洞察、运行 Agent、论坛总结、系统状态包装为 MCP 工具。
+4. **论坛主持人 Agent（结构化）**：ForumEngine 监听三个 Agent 输出，除自然语言主持人发言外，还输出确定性的结构化判断（topic / risk_level / action / rationale），无 key 时走规则 fallback，只读接口 `GET /api/forum/moderator/status`。
+5. **MCP 工具包装**：`MCPServer` 把系统状态、论坛状态、洞察搜索、演示主题包装成可单测的工具函数与可选 MCP server（`uv run python -m MCPServer.server --list`），`mcp` SDK 为可选增强。
 6. **可选爬虫集成**：MindSpider / MediaCrawler 保留为 optional integration，只有 `ENABLE_LIVE_CRAWLERS=true` 时才进入启动路径。
+7. **无 key CI 基线**：`.github/workflows/ci.yml` 在无 key、无 live crawler、无外部数据库的条件下跑 compileall 与 no-key 测试套件，保证作品集随时可复现。
 
 <div align="center">
 <img src="static/image/system_schematic.png" alt="banner" width="800">

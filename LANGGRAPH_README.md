@@ -18,6 +18,8 @@
 - ForumEngine 主持跨 Agent 协作
 - MindSpider / MediaCrawler 仅作为 `ENABLE_LIVE_CRAWLERS=true` 的可选集成
 
+> **Phase 2（已完成）**：在 Phase 1 基线上补强了结构化 Forum Moderator（`GET /api/forum/moderator/status`，无 key 规则 fallback）、MCP 工具包装（`MCPServer`，`uv run python -m MCPServer.server --list`）、无 key 前端烟测，以及无 key CI workflow（`.github/workflows/ci.yml`）。最低验证路径见 `docs/QUICKSTART.md` 的「无 Docker / 无 key 的最低验证路径」。
+
 ---
 
 ## 📦 交付清单

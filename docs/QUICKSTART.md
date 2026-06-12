@@ -59,6 +59,67 @@ ENABLE_LIVE_CRAWLERS=true
 
 ---
 
+## 无 Docker / 无 key 的最低验证路径
+
+如果面试官/招聘方不方便启动 Postgres 或配置任何 API key，可以只跑 no-key 测试套件验证核心能力（LangGraph 三引擎可导入、Forum Moderator fallback、MCP 工具可调用、前端接口可渲染）：
+
+```bash
+PORTFOLIO_DEMO_MODE=true ENABLE_LIVE_CRAWLERS=false uv run python -m pytest \
+  tests/test_monitor.py \
+  tests/test_report_engine_sanitization.py \
+  tests/test_portfolio_seed.py \
+  tests/test_frontend_smoke.py \
+  tests/test_forum_moderator.py \
+  tests/test_mcp_server.py \
+  -q
+```
+
+这组测试不依赖 Postgres、API key、Playwright 或 MediaCrawler，CI（`.github/workflows/ci.yml`）跑的也是同一组校验。
+
+---
+
+## Forum Moderator（论坛主持人结构化判断）
+
+`ForumEngine` 在自然语言主持人发言之外，额外输出确定性的结构化判断（topic / risk_level / action / rationale / source_count）。无 `FORUM_HOST_API_KEY` 时走规则 fallback，有 key 时使用 LLM，LLM 失败也会回退到结构化结果，不会让前端或监控中断。
+
+只读接口：
+
+```bash
+curl http://127.0.0.1:5000/api/forum/moderator/status
+```
+
+主控制台论坛页顶部的「主持人结构化判断 / Moderator Verdict」卡片会实时展示风险等级与建议动作。
+
+---
+
+## MCP 工具（可选增强）
+
+`MCPServer` 把作品集核心能力包装成可单测的工具函数，并提供一层可选的 MCP server。工具函数不依赖 `mcp` SDK，缺少依赖时主项目不受影响。
+
+列出工具 / 直接调用（无需安装 mcp）：
+
+```bash
+uv run python -m MCPServer.server --list
+uv run python -m MCPServer.server --call portfolio_demo_topics
+uv run python -m MCPServer.server --call portfolio_search_insights --args '{"topic": "低空物流", "limit": 5}'
+```
+
+可用工具：
+
+- `portfolio_system_status`：demo 模式、爬虫开关、数据库配置摘要、核心 endpoint。
+- `portfolio_forum_status`：论坛日志摘要与 Moderator 最新结构化状态。
+- `portfolio_search_insights`：InsightEngine 确定性话题搜索（优先 seed 数据；DB 不可用返回明确错误）。
+- `portfolio_demo_topics`：样例数据支持的面试演示主题。
+
+需要标准 MCP server 时再安装 SDK：
+
+```bash
+uv pip install mcp
+uv run python -m MCPServer.server   # 启动 stdio MCP server
+```
+
+---
+
 ## LangGraph 单引擎调试
 
 如果只想调试某一个 LangGraph 子应用，可以直接运行：
