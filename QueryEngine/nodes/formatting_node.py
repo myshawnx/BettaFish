@@ -4,6 +4,7 @@
 """
 
 import json
+import os
 from typing import List, Dict, Any
 
 from .base_node import BaseNode
@@ -69,9 +70,18 @@ class ReportFormattingNode(BaseNode):
             logger.info("正在格式化最终报告")
             
             # 调用LLM生成Markdown格式（流式，安全拼接UTF-8）
+            max_tokens = kwargs.get("max_tokens")
+            if max_tokens is None:
+                max_tokens = int(os.getenv("REPORT_FORMATTING_MAX_TOKENS", "1600"))
+
+            llm_kwargs = {}
+            if max_tokens > 0:
+                llm_kwargs["max_tokens"] = max_tokens
+
             response = self.llm_client.stream_invoke_to_string(
                 SYSTEM_PROMPT_REPORT_FORMATTING,
                 message,
+                **llm_kwargs,
             )
             
             # 处理响应

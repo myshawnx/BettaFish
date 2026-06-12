@@ -232,9 +232,71 @@ def add_message(state: QueryGraphState, message: str) -> Dict:
     }
 
 
+def _build_error_fallback_summary(state: QueryGraphState, error: str) -> Dict:
+    """Create an extractive summary when summarization fails after search."""
+    search_results = state.get("current_search_results") or []
+    paragraphs = state.get("paragraphs") or []
+    idx = state.get("current_paragraph_index", 0)
+    if not search_results or not paragraphs or not isinstance(idx, int) or idx >= len(paragraphs):
+        return {}
+
+    error_text = error.lower()
+    summary_error_markers = (
+        "summary",
+        "summarization",
+        "data_inspection_failed",
+        "datainspectionfailed",
+        "content_filter",
+        "总结",
+    )
+    if not any(marker in error_text for marker in summary_error_markers):
+        return {}
+
+    paragraph = paragraphs[idx]
+    title = paragraph.get("title", "Research summary")
+    lines = [
+        f"## {title}",
+        "",
+        "LLM summarization failed, so this section uses an extractive evidence fallback.",
+        f"Search query: {state.get('current_search_query') or 'N/A'}",
+        f"Fallback reason: {error}",
+        "",
+        "Evidence:",
+    ]
+    for index, result in enumerate(search_results[:5], start=1):
+        item_title = (result.get("title") or "Untitled").strip()
+        url = (result.get("url") or "").strip()
+        published_date = (result.get("published_date") or "").strip()
+        snippet = (result.get("content") or "").strip().replace("\n", " ")
+        snippet = snippet[:500] + ("..." if len(snippet) > 500 else "")
+        line = f"{index}. {item_title}"
+        if published_date:
+            line += f" ({published_date})"
+        if url:
+            line += f" - {url}"
+        lines.append(line)
+        if snippet:
+            lines.append(f"   {snippet}")
+
+    fallback_summary = "\n".join(lines)
+    updated_paragraphs = paragraphs.copy()
+    updated_paragraphs[idx] = {
+        **updated_paragraphs[idx],
+        "latest_summary": fallback_summary,
+    }
+    return {
+        "paragraphs": updated_paragraphs,
+        "current_summary": fallback_summary,
+        "current_reflection_count": 0,
+        "messages": [f"paragraph {idx + 1} used extractive fallback summary"],
+    }
+
+
 def add_error(state: QueryGraphState, error: str) -> Dict:
     """添加错误到列表"""
-    return {
+    update = {
         "errors": [f"[{datetime.now().isoformat()}] {error}"],
         "updated_at": datetime.now().isoformat()
     }
+    update.update(_build_error_fallback_summary(state, error))
+    return update

@@ -208,6 +208,9 @@ class LangGraphMediaAgent:
             # 直接调用ReportStructureNode.run()获取结构列表(List[Dict[title,content]])
             self.structure_node_impl.query = state["query"]
             report_structure = self.structure_node_impl.run()
+            max_paragraphs = state.get("max_paragraphs") or len(report_structure)
+            if max_paragraphs > 0:
+                report_structure = report_structure[:max_paragraphs]
 
             report_title = f"关于'{state['query']}'的深度研究报告"
 
@@ -453,7 +456,8 @@ class LangGraphMediaAgent:
 
         # 准备报告数据
         report_data = []
-        for p in state["paragraphs"]:
+        paragraph_limit = state.get("max_paragraphs") or len(state["paragraphs"])
+        for p in state["paragraphs"][:paragraph_limit]:
             report_data.append({
                 "title": p["title"],
                 "paragraph_latest_state": p["latest_summary"]
@@ -491,6 +495,11 @@ class LangGraphMediaAgent:
         reflection_count = state["current_reflection_count"]
         max_reflections = state["max_reflections"]
         total_paragraphs = len(state["paragraphs"])
+        paragraph_limit = state.get("max_paragraphs") or total_paragraphs
+        processing_limit = min(total_paragraphs, paragraph_limit)
+        if reflection_count >= max_reflections and idx + 1 >= processing_limit:
+            logger.info("Configured paragraph limit reached; formatting final report")
+            return "finish"
 
         # 检查是否达到最大反思次数
         if reflection_count >= max_reflections:

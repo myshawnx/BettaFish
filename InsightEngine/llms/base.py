@@ -67,7 +67,15 @@ class LLMClient:
             {"role": "user", "content": user_prompt},
         ]
 
-        allowed_keys = {"temperature", "top_p", "presence_penalty", "frequency_penalty", "stream"}
+        allowed_keys = {
+            "temperature",
+            "top_p",
+            "presence_penalty",
+            "frequency_penalty",
+            "stream",
+            "max_tokens",
+            "max_completion_tokens",
+        }
         extra_params = {key: value for key, value in kwargs.items() if key in allowed_keys and value is not None}
 
         timeout = kwargs.pop("timeout", self.timeout)
@@ -106,7 +114,14 @@ class LLMClient:
             {"role": "user", "content": user_prompt},
         ]
 
-        allowed_keys = {"temperature", "top_p", "presence_penalty", "frequency_penalty"}
+        allowed_keys = {
+            "temperature",
+            "top_p",
+            "presence_penalty",
+            "frequency_penalty",
+            "max_tokens",
+            "max_completion_tokens",
+        }
         extra_params = {key: value for key, value in kwargs.items() if key in allowed_keys and value is not None}
         # 强制使用流式
         extra_params["stream"] = True

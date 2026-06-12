@@ -285,7 +285,7 @@ def truncate_content(content: str, max_length: int = 20000) -> str:
         return truncated + "..."
 
 
-def format_search_results_for_prompt(search_results: List[Dict[str, Any]], 
+def format_search_results_for_prompt(search_results: List[Dict[str, Any]],
                                    max_length: int = 20000) -> List[str]:
     """
     格式化搜索结果用于提示词
@@ -298,11 +298,26 @@ def format_search_results_for_prompt(search_results: List[Dict[str, Any]],
         格式化后的内容列表
     """
     formatted_results = []
-    
-    for result in search_results:
-        content = result.get('content', '')
-        if content:
-            truncated_content = truncate_content(content, max_length)
-            formatted_results.append(truncated_content)
-    
+    per_result_limit = min(max_length, 800)
+
+    for index, result in enumerate(search_results, start=1):
+        title = (result.get('title') or '').strip()
+        url = (result.get('url') or '').strip()
+        published_date = (result.get('published_date') or '').strip()
+        content = (result.get('content') or '').strip()
+        if not any([title, url, published_date, content]):
+            continue
+
+        snippet = truncate_content(content, per_result_limit) if content else ""
+        parts = [f"Result {index}"]
+        if title:
+            parts.append(f"Title: {title}")
+        if published_date:
+            parts.append(f"Published: {published_date}")
+        if url:
+            parts.append(f"URL: {url}")
+        if snippet:
+            parts.append(f"Snippet: {snippet}")
+        formatted_results.append("\n".join(parts))
+
     return formatted_results

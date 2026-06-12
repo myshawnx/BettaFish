@@ -54,6 +54,20 @@ class RetryConfig:
 # 默认配置
 DEFAULT_RETRY_CONFIG = RetryConfig()
 
+
+def _is_non_retryable_exception(exc: Exception) -> bool:
+    """Return True for deterministic provider rejections that retries cannot fix."""
+    text = str(exc).lower()
+    non_retryable_markers = (
+        "data_inspection_failed",
+        "datainspectionfailed",
+        "invalid_request_error",
+        "content_filter",
+        "content management policy",
+    )
+    return any(marker in text for marker in non_retryable_markers)
+
+
 def with_retry(config: RetryConfig = None):
     """
     重试装饰器
@@ -81,6 +95,9 @@ def with_retry(config: RetryConfig = None):
                     
                 except config.retry_on_exceptions as e:
                     last_exception = e
+                    if _is_non_retryable_exception(e):
+                        logger.error(f"Function {func.__name__} hit a non-retryable provider rejection: {str(e)}")
+                        raise
                     
                     if attempt == config.max_retries:
                         # 最后一次尝试也失败了
@@ -167,6 +184,9 @@ def with_graceful_retry(config: RetryConfig = None, default_return=None):
                     
                 except config.retry_on_exceptions as e:
                     last_exception = e
+                    if _is_non_retryable_exception(e):
+                        logger.warning(f"Non-critical API {func.__name__} hit a non-retryable provider rejection: {str(e)}")
+                        return default_return
                     
                     if attempt == config.max_retries:
                         # 最后一次尝试也失败了，返回默认值而不抛出异常
