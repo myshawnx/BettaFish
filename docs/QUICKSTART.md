@@ -63,11 +63,14 @@ ENABLE_LIVE_CRAWLERS=true
 
 如果面试官/招聘方不方便启动 Postgres 或配置任何 API key，可以只跑 no-key 测试套件验证核心能力（LangGraph 三引擎可导入、Forum Moderator fallback、MCP 工具可调用、前端接口可渲染）：
 
+注意：no-key 路径只是 smoke/CI 基线。真实三引擎分析仍需要 LLM key，以及 QueryEngine 的 Tavily key、MediaEngine 的 Anspire/Bocha key。
+
 ```bash
 PORTFOLIO_DEMO_MODE=true ENABLE_LIVE_CRAWLERS=false uv run python -m pytest \
   tests/test_monitor.py \
   tests/test_report_engine_sanitization.py \
   tests/test_portfolio_seed.py \
+  tests/test_langgraph_imports.py \
   tests/test_frontend_smoke.py \
   tests/test_forum_moderator.py \
   tests/test_mcp_server.py \
@@ -92,11 +95,11 @@ curl http://127.0.0.1:5000/api/forum/moderator/status
 
 ---
 
-## MCP 工具（可选增强）
+## MCP 工具
 
-`MCPServer` 把作品集核心能力包装成可单测的工具函数，并提供一层可选的 MCP server。工具函数不依赖 `mcp` SDK，缺少依赖时主项目不受影响。
+`MCPServer` 把作品集核心能力包装成可单测工具，并默认提供独立 stdio MCP server。底层 Tavily / Anspire / Bocha API 仍由各引擎内部封装，MCP 只暴露作品集级别的稳定工具面。
 
-列出工具 / 直接调用（无需安装 mcp）：
+列出工具 / 直接调用：
 
 ```bash
 uv run python -m MCPServer.server --list
@@ -111,10 +114,9 @@ uv run python -m MCPServer.server --call portfolio_search_insights --args '{"top
 - `portfolio_search_insights`：InsightEngine 确定性话题搜索（优先 seed 数据；DB 不可用返回明确错误）。
 - `portfolio_demo_topics`：样例数据支持的面试演示主题。
 
-需要标准 MCP server 时再安装 SDK：
+启动标准 MCP server：
 
 ```bash
-uv pip install mcp
 uv run python -m MCPServer.server   # 启动 stdio MCP server
 ```
 

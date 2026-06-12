@@ -52,6 +52,7 @@ jobs:
             tests/test_monitor.py \
             tests/test_report_engine_sanitization.py \
             tests/test_portfolio_seed.py \
+            tests/test_langgraph_imports.py \
             tests/test_frontend_smoke.py \
             tests/test_forum_moderator.py \
             tests/test_mcp_server.py \

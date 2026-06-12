@@ -84,7 +84,16 @@ def test_tool_registry_exposes_all_tools():
         assert description
 
 
-def test_server_list_and_call_paths_do_not_require_mcp(capsys):
+def test_server_builds_mcp_server_with_default_dependency():
+    from MCPServer import server
+
+    mcp_server = server._build_mcp_server()
+
+    assert mcp_server is not None
+    assert hasattr(mcp_server, "run")
+
+
+def test_server_list_and_call_paths(capsys):
     from MCPServer import server
 
     assert server.list_tools() == 0
