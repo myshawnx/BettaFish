@@ -983,8 +983,9 @@ def _start_async_shutdown(cleanup_timeout: float = 3.0):
 
     threading.Thread(target=_cleanup_and_exit, daemon=True).start()
 
-# 注册清理函数
-atexit.register(cleanup_processes)
+# 注册清理函数（pytest 环境下跳过，避免解释器退出时向已关闭的日志流写入）
+if "PYTEST_CURRENT_TEST" not in os.environ and "pytest" not in sys.modules:
+    atexit.register(cleanup_processes)
 
 @app.route('/')
 def index():
@@ -1124,6 +1125,34 @@ def stop_forum_monitoring_api():
         return jsonify({'success': True, 'message': 'ForumEngine论坛已停止'})
     except Exception as e:
         return jsonify({'success': False, 'message': f'停止论坛失败: {str(e)}'})
+
+@app.route('/api/forum/moderator/status')
+def get_forum_moderator_status():
+    """获取Forum Moderator最新结构化状态"""
+    try:
+        from ForumEngine.monitor import get_moderator_status
+        status = get_moderator_status()
+        return jsonify({'success': True, 'moderator': status})
+    except Exception as e:
+        logger.exception(f"读取Forum Moderator状态失败: {e}")
+        return jsonify({
+            'success': False,
+            'moderator': {
+                'running': False,
+                'generating': False,
+                'topic': 'Moderator 状态不可用',
+                'risk_level': 'medium',
+                'action': 'investigate',
+                'rationale': '读取主持人状态时发生异常。',
+                'suggested_host_message': '主持人：状态接口暂时不可用，请查看后端日志。',
+                'source_count': 0,
+                'llm_enabled': False,
+                'error': str(e),
+                'updated_at': None,
+                'buffered_speeches': 0,
+                'host_available': False
+            }
+        }), 200
 
 @app.route('/api/forum/log')
 def get_forum_log():

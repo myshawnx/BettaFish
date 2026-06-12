@@ -15,7 +15,7 @@ from loguru import logger
 
 # 导入论坛主持人模块
 try:
-    from .llm_host import generate_host_speech
+    from .llm_host import generate_host_speech, generate_moderator_verdict
     HOST_AVAILABLE = True
 except ImportError:
     logger.exception("ForumEngine: 论坛主持人模块未找到，将以纯监控模式运行")
@@ -49,6 +49,7 @@ class LogMonitor:
         self.agent_speeches_buffer = []  # agent发言缓冲区
         self.host_speech_threshold = 5  # 每5条agent发言触发一次主持人发言
         self.is_host_generating = False  # 主持人是否正在生成发言
+        self.latest_moderator_state = self._default_moderator_state()
        
         # 目标节点识别模式
         # 1. 类名（旧格式可能包含）
@@ -74,7 +75,38 @@ class LogMonitor:
        
         # 确保logs目录存在
         self.log_dir.mkdir(exist_ok=True)
-   
+
+    def _default_moderator_state(self) -> Dict:
+        return {
+            "running": self.is_monitoring,
+            "generating": self.is_host_generating,
+            "topic": "等待 Agent 发言",
+            "risk_level": "low",
+            "action": "wait",
+            "rationale": "当前论坛还没有可分析的 Agent 输出。",
+            "suggested_host_message": "主持人：当前正在等待各 Agent 输出，收到有效分析后会汇总风险与下一步讨论方向。",
+            "source_count": 0,
+            "llm_enabled": False,
+            "error": None,
+            "updated_at": None,
+        }
+
+    def _update_moderator_state(self, verdict: Dict):
+        state = self._default_moderator_state()
+        state.update(verdict or {})
+        state["running"] = self.is_monitoring
+        state["generating"] = self.is_host_generating
+        state["updated_at"] = datetime.now().isoformat(timespec="seconds")
+        self.latest_moderator_state = state
+
+    def get_moderator_status(self) -> Dict:
+        state = dict(self.latest_moderator_state or self._default_moderator_state())
+        state["running"] = self.is_monitoring
+        state["generating"] = self.is_host_generating
+        state["buffered_speeches"] = len(self.agent_speeches_buffer)
+        state["host_available"] = HOST_AVAILABLE
+        return state
+
     def clear_forum_log(self):
         """清空forum.log文件"""
         try:
@@ -99,6 +131,7 @@ class LogMonitor:
             # 重置主持人相关状态
             self.agent_speeches_buffer = []
             self.is_host_generating = False
+            self.latest_moderator_state = self._default_moderator_state()
            
         except Exception as e:
             logger.exception(f"ForumEngine: 清空forum.log失败: {e}")
@@ -525,37 +558,42 @@ class LogMonitor:
         """触发主持人发言（同步执行）"""
         if not HOST_AVAILABLE or self.is_host_generating:
             return
-        
+
         try:
-            # 设置生成标志
             self.is_host_generating = True
-            
-            # 获取缓冲区的5条发言
+
             recent_speeches = self.agent_speeches_buffer[:5]
             if len(recent_speeches) < 5:
                 self.is_host_generating = False
                 return
-            
+
             logger.info("ForumEngine: 正在生成主持人发言...")
-            
-            # 调用主持人生成发言（传入最近5条）
+
+            verdict = generate_moderator_verdict(recent_speeches)
+            self._update_moderator_state(verdict)
             host_speech = generate_host_speech(recent_speeches)
-            
+
             if host_speech:
-                # 写入主持人发言到forum.log
                 self.write_to_forum_log(host_speech, "HOST")
-                logger.info(f"ForumEngine: 主持人发言已记录")
-                
-                # 清空已处理的5条发言
+                logger.info("ForumEngine: 主持人发言已记录")
                 self.agent_speeches_buffer = self.agent_speeches_buffer[5:]
             else:
                 logger.error("ForumEngine: 主持人发言生成失败")
-            
-            # 重置生成标志
+
             self.is_host_generating = False
-                
+
         except Exception as e:
             logger.exception(f"ForumEngine: 触发主持人发言时出错: {e}")
+            self._update_moderator_state({
+                "topic": "主持人生成失败",
+                "risk_level": "medium",
+                "action": "investigate",
+                "rationale": "主持人模块执行时出现异常，论坛监控继续运行。",
+                "suggested_host_message": "主持人：当前主持模块出现异常，请先查看日志并继续保留 Agent 原始输出。",
+                "source_count": 0,
+                "llm_enabled": False,
+                "error": str(e),
+            })
             self.is_host_generating = False
     
     def _clean_content_tags(self, content: str, app_name: str) -> str:
@@ -857,3 +895,8 @@ def stop_forum_monitoring():
 def get_forum_log():
     """获取forum.log内容"""
     return get_monitor().get_forum_log_content()
+
+
+def get_moderator_status():
+    """获取最新主持人结构化状态"""
+    return get_monitor().get_moderator_status()

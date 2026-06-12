@@ -33,23 +33,20 @@ class ForumHost:
     def __init__(self, api_key: str = None, base_url: Optional[str] = None, model_name: Optional[str] = None):
         """
         初始化论坛主持人
-        
+
         Args:
             api_key: 论坛主持人 LLM API 密钥，如果不提供则从配置文件读取
             base_url: 论坛主持人 LLM API 接口基础地址，默认使用配置文件提供的SiliconFlow地址
         """
-        self.api_key = api_key or settings.FORUM_HOST_API_KEY
-
-        if not self.api_key:
-            raise ValueError("未找到论坛主持人API密钥，请在环境变量文件中设置FORUM_HOST_API_KEY")
-
+        self.api_key = settings.FORUM_HOST_API_KEY if api_key is None else api_key
         self.base_url = base_url or settings.FORUM_HOST_BASE_URL
-
-        self.client = OpenAI(
-            api_key=self.api_key,
-            base_url=self.base_url
-        )
-        self.model = model_name or settings.FORUM_HOST_MODEL_NAME  # Use configured model
+        self.model = model_name or settings.FORUM_HOST_MODEL_NAME
+        self.client = None
+        if self.api_key:
+            self.client = OpenAI(
+                api_key=self.api_key,
+                base_url=self.base_url
+            )
 
         # Track previous summaries to avoid duplicates
         self.previous_summaries = []
@@ -57,40 +54,133 @@ class ForumHost:
     def generate_host_speech(self, forum_logs: List[str]) -> Optional[str]:
         """
         生成主持人发言
-        
+
         Args:
             forum_logs: 论坛日志内容列表
-            
+
         Returns:
             主持人发言内容，如果生成失败返回None
         """
+        verdict = self.generate_moderator_verdict(forum_logs)
+        if not self.client:
+            return verdict["suggested_host_message"]
+
         try:
-            # 解析论坛日志，提取有效内容
             parsed_content = self._parse_forum_logs(forum_logs)
-            
+
             if not parsed_content['agent_speeches']:
                 print("ForumHost: 没有找到有效的agent发言")
-                return None
-            
-            # 构建prompt
+                return verdict["suggested_host_message"]
+
             system_prompt = self._build_system_prompt()
             user_prompt = self._build_user_prompt(parsed_content)
-            
-            # 调用API生成发言
             response = self._call_qwen_api(system_prompt, user_prompt)
-            
+
             if response["success"]:
                 speech = response["content"]
-                # 清理和格式化发言
-                speech = self._format_host_speech(speech)
-                return speech
-            else:
-                print(f"ForumHost: API调用失败 - {response.get('error', '未知错误')}")
-                return None
-                
+                return self._format_host_speech(speech)
+
+            print(f"ForumHost: API调用失败 - {response.get('error', '未知错误')}")
+            return verdict["suggested_host_message"]
+
         except Exception as e:
             print(f"ForumHost: 生成发言时出错 - {str(e)}")
-            return None
+            return verdict["suggested_host_message"]
+
+    def generate_moderator_verdict(self, forum_logs: List[str]) -> Dict[str, Any]:
+        parsed_content = self._parse_forum_logs(forum_logs)
+        speeches = parsed_content['agent_speeches']
+        combined_text = "\n".join(speech['content'] for speech in speeches).strip()
+        source_count = len({speech['speaker'] for speech in speeches})
+
+        if not speeches:
+            return {
+                "topic": "等待 Agent 发言",
+                "risk_level": "low",
+                "action": "wait",
+                "rationale": "当前论坛还没有可分析的 Agent 输出。",
+                "suggested_host_message": "主持人：当前正在等待各 Agent 输出，收到有效分析后会汇总风险与下一步讨论方向。",
+                "source_count": 0,
+                "llm_enabled": bool(self.client),
+                "error": None if self.client else "FORUM_HOST_API_KEY 未配置，使用规则 fallback"
+            }
+
+        risk_keywords = ["风险", "争议", "危机", "攻击", "负面", "舆情", "下跌", "投诉", "违法", "造假"]
+        gap_keywords = ["不确定", "缺少", "不足", "待确认", "无法判断", "需要进一步", "暂无"]
+        opportunity_keywords = ["机会", "增长", "利好", "改善", "稳定", "突破", "领先"]
+
+        risk_hits = [keyword for keyword in risk_keywords if keyword in combined_text]
+        gap_hits = [keyword for keyword in gap_keywords if keyword in combined_text]
+        opportunity_hits = [keyword for keyword in opportunity_keywords if keyword in combined_text]
+
+        if risk_hits and source_count >= 2:
+            risk_level = "high"
+            action = "escalate"
+            rationale = f"多个信息源共同提到风险相关信号：{', '.join(risk_hits[:4])}。"
+        elif risk_hits or gap_hits:
+            risk_level = "medium"
+            action = "investigate"
+            matched = risk_hits or gap_hits
+            rationale = f"讨论中出现需要核验的信号：{', '.join(matched[:4])}。"
+        else:
+            risk_level = "low"
+            action = "summarize"
+            rationale = "当前讨论以事实整理和趋势归纳为主，未出现明显高风险信号。"
+
+        topic = self._infer_topic(combined_text)
+        suggested_host_message = self._build_fallback_host_message(
+            topic=topic,
+            risk_level=risk_level,
+            action=action,
+            rationale=rationale,
+            source_count=source_count,
+            has_gap=bool(gap_hits),
+            has_opportunity=bool(opportunity_hits)
+        )
+
+        return {
+            "topic": topic,
+            "risk_level": risk_level,
+            "action": action,
+            "rationale": rationale,
+            "suggested_host_message": suggested_host_message,
+            "source_count": source_count,
+            "llm_enabled": bool(self.client),
+            "error": None if self.client else "FORUM_HOST_API_KEY 未配置，使用规则 fallback"
+        }
+
+    def _infer_topic(self, text: str) -> str:
+        candidates = re.findall(r'[一-鿿A-Za-z0-9]{2,}(?:集团|公司|事件|行业|项目|产品|平台|舆情|风险|趋势)?', text)
+        stop_words = {"当前", "分析", "总结", "发现", "信息", "数据", "市场", "舆情", "需要", "可能", "相关"}
+        for candidate in candidates:
+            if candidate not in stop_words and len(candidate) >= 3:
+                return candidate[:30]
+        return "多 Agent 舆情讨论"
+
+    def _build_fallback_host_message(
+        self,
+        topic: str,
+        risk_level: str,
+        action: str,
+        rationale: str,
+        source_count: int,
+        has_gap: bool,
+        has_opportunity: bool
+    ) -> str:
+        action_text = {
+            "escalate": "建议优先核验高风险信号，并对不同 Agent 的证据来源做交叉确认。",
+            "investigate": "建议补充关键事实、时间线和来源可信度，再推进下一轮分析。",
+            "summarize": "建议沉淀当前共识，并围绕趋势、影响范围和后续观察指标继续讨论。"
+        }[action]
+        next_focus = "下一轮重点关注信息缺口与证据可靠性。" if has_gap else "下一轮可以继续比较不同数据源之间的共识与分歧。"
+        if has_opportunity and risk_level == "low":
+            next_focus = "下一轮可以进一步评估积极信号是否具备持续性。"
+
+        return (
+            f"主持人：当前主题聚焦于“{topic}”，已有 {source_count} 类 Agent 贡献观点。"
+            f"结构化判断为 {risk_level} 风险，建议动作是 {action}。{rationale}"
+            f"{action_text}{next_focus}"
+        )
     
     def _parse_forum_logs(self, forum_logs: List[str]) -> Dict[str, Any]:
         """
@@ -260,3 +350,8 @@ def get_forum_host() -> ForumHost:
 def generate_host_speech(forum_logs: List[str]) -> Optional[str]:
     """生成主持人发言的便捷函数"""
     return get_forum_host().generate_host_speech(forum_logs)
+
+
+def generate_moderator_verdict(forum_logs: List[str]) -> Dict[str, Any]:
+    """生成结构化主持人判断的便捷函数"""
+    return get_forum_host().generate_moderator_verdict(forum_logs)
