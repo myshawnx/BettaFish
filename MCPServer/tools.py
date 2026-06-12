@@ -204,8 +204,89 @@ def portfolio_demo_topics() -> Dict[str, Any]:
     }
 
 
+def portfolio_agent_runtime_status() -> Dict[str, Any]:
+    """Return the structured AgentRuntime summary used by LangGraph and Forum."""
+    try:
+        from AgentRuntime import get_runtime_status
+
+        return get_runtime_status()
+    except Exception as exc:
+        return {
+            "success": False,
+            "error": f"AgentRuntime status unavailable: {exc}",
+        }
+
+
+def portfolio_agent_runs(limit: int = 10) -> Dict[str, Any]:
+    """Return latest AgentRuntime run records."""
+    try:
+        safe_limit = max(1, min(int(limit), 100))
+    except (TypeError, ValueError):
+        safe_limit = 10
+
+    try:
+        from AgentRuntime import list_runs
+
+        runs = list_runs(limit=safe_limit)
+        return {
+            "success": True,
+            "runs_count": len(runs),
+            "runs": runs,
+        }
+    except Exception as exc:
+        return {
+            "success": False,
+            "error": f"AgentRuntime runs unavailable: {exc}",
+            "runs": [],
+        }
+
+
+def portfolio_agent_events(
+    run_id: str = None,
+    engine: str = None,
+    limit: int = 20,
+) -> Dict[str, Any]:
+    """Return recent structured AgentRuntime events."""
+    try:
+        safe_limit = max(1, min(int(limit), 200))
+    except (TypeError, ValueError):
+        safe_limit = 20
+
+    try:
+        from AgentRuntime import list_events
+
+        events = list_events(
+            run_id=run_id or None,
+            engine=engine or None,
+            limit=safe_limit,
+        )
+        return {
+            "success": True,
+            "events_count": len(events),
+            "events": events,
+        }
+    except Exception as exc:
+        return {
+            "success": False,
+            "error": f"AgentRuntime events unavailable: {exc}",
+            "events": [],
+        }
+
+
 # 工具注册表：name -> (callable, description)
 TOOL_REGISTRY = {
+    "portfolio_agent_runtime_status": (
+        portfolio_agent_runtime_status,
+        "Return structured AgentRuntime status for LangGraph agent runs.",
+    ),
+    "portfolio_agent_runs": (
+        portfolio_agent_runs,
+        "Return latest AgentRuntime run records.",
+    ),
+    "portfolio_agent_events": (
+        portfolio_agent_events,
+        "Return recent AgentRuntime event records.",
+    ),
     "portfolio_system_status": (
         portfolio_system_status,
         "返回作品集运行时状态：demo 模式、爬虫开关、数据库配置摘要。",

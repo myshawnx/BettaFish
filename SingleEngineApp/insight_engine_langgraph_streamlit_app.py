@@ -37,6 +37,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from InsightEngine.langgraph_agent import LangGraphInsightAgent
 from InsightEngine.langgraph_state import create_initial_state
 from InsightEngine.utils.config import Settings
+from AgentRuntime import finish_run, start_run
 from config import settings
 from utils.github_issues import error_with_issue_link
 
@@ -150,6 +151,8 @@ def main():
 
 def execute_research(query: str, config: Settings):
     """执行研究 (流式驱动 LangGraph, 实时更新进度)"""
+    agent = None
+    runtime_run = None
     try:
         # 创建进度条
         progress_bar = st.progress(0)
@@ -164,6 +167,14 @@ def execute_research(query: str, config: Settings):
         thread_id = f"insight_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         st.session_state.langgraph_thread_id = thread_id
         st.caption(f"Thread ID: `{thread_id}` (checkpoint 已自动保存, 可用于断点恢复)")
+        runtime_run = start_run(
+            "insight",
+            query,
+            thread_id,
+            checkpoint_path=getattr(agent, "checkpoint_path", None),
+        )
+        agent._active_run_id = runtime_run.get("run_id")
+        agent._active_thread_id = thread_id
 
         # 结构节点由 LLM 决定段落数(常 4-7 段), 每段约需 (2*反思次数+4) 步;
         # LangGraph 默认 recursion_limit=25 在多段落时会中途抛 RecursionError, 这里给足余量。
@@ -210,10 +221,13 @@ def execute_research(query: str, config: Settings):
         if not final_report or not final_report.strip():
             st.error("未生成最终报告 (final_report 为空)")
             logger.error("未生成最终报告")
+            if runtime_run:
+                finish_run(runtime_run.get("run_id"), "failed", error_summary="final_report is empty")
             return
 
         # 保存报告
-        agent._save_report(query, final_report, thread_id)
+        report_path = agent._save_report(query, final_report, thread_id)
+        finish_run(runtime_run.get("run_id") if runtime_run else None, "completed", final_report_path=report_path)
 
         # 显示结果
         display_results(final_state, final_report)
@@ -228,6 +242,12 @@ def execute_research(query: str, config: Settings):
         )
         st.error(error_display)
         logger.exception(f"研究过程中发生错误: {str(e)}")
+        if runtime_run:
+            finish_run(runtime_run.get("run_id"), "failed", error_summary=str(e))
+    finally:
+        if agent is not None:
+            agent._active_run_id = None
+            agent._active_thread_id = None
 
 
 def display_results(final_state: dict, final_report: str):

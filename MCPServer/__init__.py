@@ -5,6 +5,9 @@
 
 from .tools import (
     TOOL_REGISTRY,
+    portfolio_agent_events,
+    portfolio_agent_runs,
+    portfolio_agent_runtime_status,
     portfolio_demo_topics,
     portfolio_forum_status,
     portfolio_search_insights,
@@ -13,6 +16,9 @@ from .tools import (
 
 __all__ = [
     "TOOL_REGISTRY",
+    "portfolio_agent_events",
+    "portfolio_agent_runs",
+    "portfolio_agent_runtime_status",
     "portfolio_demo_topics",
     "portfolio_forum_status",
     "portfolio_search_insights",

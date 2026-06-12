@@ -21,6 +21,12 @@ except ImportError:
     logger.exception("ForumEngine: 论坛主持人模块未找到，将以纯监控模式运行")
     HOST_AVAILABLE = False
 
+try:
+    from AgentRuntime import list_events
+    AGENT_RUNTIME_AVAILABLE = True
+except ImportError:
+    AGENT_RUNTIME_AVAILABLE = False
+
 class LogMonitor:
     """基于文件变化的智能日志监控器"""
    
@@ -50,6 +56,7 @@ class LogMonitor:
         self.host_speech_threshold = 5  # 每5条agent发言触发一次主持人发言
         self.is_host_generating = False  # 主持人是否正在生成发言
         self.latest_moderator_state = self._default_moderator_state()
+        self.runtime_event_ids = set()
        
         # 目标节点识别模式
         # 1. 类名（旧格式可能包含）
@@ -106,6 +113,109 @@ class LogMonitor:
         state["buffered_speeches"] = len(self.agent_speeches_buffer)
         state["host_available"] = HOST_AVAILABLE
         return state
+
+    def _baseline_runtime_events(self):
+        """Use current runtime events as the monitor baseline."""
+        if not AGENT_RUNTIME_AVAILABLE:
+            return
+        try:
+            for event in list_events(limit=500, log_dir=self.log_dir):
+                event_id = event.get("event_id")
+                if event_id:
+                    self.runtime_event_ids.add(event_id)
+        except Exception as exc:
+            logger.debug(f"ForumEngine: AgentRuntime baseline failed: {exc}")
+
+    def _format_runtime_event_for_forum(self, event: Dict) -> Optional[str]:
+        """Format one AgentRuntime event as a compact forum speech."""
+        event_type = event.get("event_type")
+        status = event.get("status")
+        node = event.get("node") or event_type
+        payload = event.get("payload") or {}
+
+        if event_type == "run_started":
+            query = payload.get("query") or ""
+            return f"run_started | query={query}"
+
+        if event_type in {"run_completed", "run_failed"}:
+            message = event.get("message") or event_type
+            report_path = payload.get("final_report_path")
+            parts = [event_type, f"message={message}"]
+            if report_path:
+                parts.append(f"report={report_path}")
+            return " | ".join(parts)
+
+        if event_type not in {"node_completed", "node_failed"}:
+            return None
+
+        important_nodes = {
+            "search_paragraph",
+            "summarize_paragraph",
+            "update_summary",
+            "format_report",
+        }
+        if node not in important_nodes and status != "error":
+            return None
+
+        parts = [f"{node}:{status}"]
+        if payload.get("paragraph_title"):
+            parts.append(f"paragraph={payload.get('paragraph_title')}")
+        if payload.get("current_search_query"):
+            parts.append(f"search_query={payload.get('current_search_query')}")
+        if "search_results_count" in payload:
+            parts.append(f"results={payload.get('search_results_count')}")
+        if payload.get("current_summary"):
+            parts.append(f"summary={payload.get('current_summary')}")
+        if payload.get("final_report_preview"):
+            parts.append(f"final_report={payload.get('final_report_preview')}")
+        if payload.get("errors"):
+            parts.append(f"errors={payload.get('errors')}")
+        elif payload.get("messages"):
+            parts.append(f"messages={payload.get('messages')}")
+        return " | ".join(str(part) for part in parts if part)
+
+    def _publish_agent_speech(self, content: str, source_tag: str):
+        self.write_to_forum_log(content, source_tag)
+        timestamp = datetime.now().strftime('%H:%M:%S')
+        log_line = f"[{timestamp}] [{source_tag}] {content}"
+        self.agent_speeches_buffer.append(log_line)
+        if len(self.agent_speeches_buffer) >= self.host_speech_threshold and not self.is_host_generating:
+            self._trigger_host_speech()
+
+    def _poll_agent_runtime_events(self) -> bool:
+        """Consume structured AgentRuntime events before falling back to text logs."""
+        if not AGENT_RUNTIME_AVAILABLE:
+            return False
+
+        try:
+            events = list_events(limit=200, log_dir=self.log_dir)
+        except Exception as exc:
+            logger.debug(f"ForumEngine: AgentRuntime poll failed: {exc}")
+            return False
+
+        captured = []
+        for event in events:
+            event_id = event.get("event_id")
+            if not event_id or event_id in self.runtime_event_ids:
+                continue
+            self.runtime_event_ids.add(event_id)
+            content = self._format_runtime_event_for_forum(event)
+            if content:
+                captured.append((event, content))
+
+        if not captured:
+            return False
+
+        if not self.is_searching:
+            self.is_searching = True
+            self.search_inactive_count = 0
+            self.clear_forum_log()
+
+        for event, content in captured:
+            source_tag = str(event.get("engine") or "agent").upper()
+            self._publish_agent_speech(content, source_tag)
+
+        return True
 
     def clear_forum_log(self):
         """清空forum.log文件"""
@@ -632,12 +742,17 @@ class LogMonitor:
             self.in_error_block[app_name] = False
             # logger.info(f"ForumEngine: {app_name} 基线行数: {self.file_line_counts[app_name]}")
        
+        self._baseline_runtime_events()
+
         while self.is_monitoring:
             try:
                 # 同时检测三个log文件的变化
                 any_growth = False
                 any_shrink = False
                 captured_any = False
+                if self._poll_agent_runtime_events():
+                    any_growth = True
+                    captured_any = True
                
                 # 为每个log文件独立处理
                 for app_name, log_file in self.monitored_logs.items():

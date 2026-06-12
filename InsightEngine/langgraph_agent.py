@@ -17,6 +17,7 @@ from loguru import logger
 
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.sqlite import SqliteSaver
+from AgentRuntime import build_langgraph_payload, finish_run, record_event, start_run
 
 from .langgraph_state import (
     InsightGraphState,
@@ -93,6 +94,10 @@ class LangGraphInsightAgent:
         # check_same_thread=False: Streamlit多线程环境下必需
         os.makedirs(checkpoint_dir, exist_ok=True)
         checkpoint_path = os.path.join(checkpoint_dir, "insight_checkpoints.db")
+        self.engine_name = "insight"
+        self.checkpoint_path = checkpoint_path
+        self._active_run_id = None
+        self._active_thread_id = None
         self._checkpoint_conn = sqlite3.connect(checkpoint_path, check_same_thread=False)
         self.checkpointer = SqliteSaver(self._checkpoint_conn)
 
@@ -101,6 +106,43 @@ class LangGraphInsightAgent:
 
         logger.info(f"LangGraph InsightEngine已初始化")
         logger.info(f"Checkpoint路径: {checkpoint_path}")
+
+    def _traced_node(self, node_name: str, handler):
+        """Wrap a LangGraph node with best-effort runtime event tracing."""
+        def _wrapped(state):
+            run_id = getattr(self, "_active_run_id", None)
+            thread_id = getattr(self, "_active_thread_id", None)
+            try:
+                update = handler(state)
+            except Exception as exc:
+                if run_id:
+                    record_event(
+                        engine=self.engine_name,
+                        run_id=run_id,
+                        thread_id=thread_id,
+                        event_type="node_failed",
+                        node=node_name,
+                        status="error",
+                        message=str(exc),
+                        payload=build_langgraph_payload(node_name, state, {"errors": [str(exc)]}),
+                    )
+                raise
+
+            if run_id:
+                errors = (update or {}).get("errors") if isinstance(update, dict) else None
+                record_event(
+                    engine=self.engine_name,
+                    run_id=run_id,
+                    thread_id=thread_id,
+                    event_type="node_failed" if errors else "node_completed",
+                    node=node_name,
+                    status="error" if errors else "ok",
+                    message=(errors[-1] if isinstance(errors, list) and errors else None),
+                    payload=build_langgraph_payload(node_name, state, update),
+                )
+            return update
+
+        return _wrapped
 
     def _build_graph(self) -> StateGraph:
         """
@@ -116,13 +158,13 @@ class LangGraphInsightAgent:
         workflow = StateGraph(InsightGraphState)
 
         # 添加节点
-        workflow.add_node("generate_structure", self._generate_structure_node)
-        workflow.add_node("search_paragraph", self._search_paragraph_node)
-        workflow.add_node("summarize_paragraph", self._summarize_paragraph_node)
-        workflow.add_node("reflect_paragraph", self._reflect_paragraph_node)
-        workflow.add_node("update_summary", self._update_summary_node)
-        workflow.add_node("advance_paragraph", self._advance_paragraph_node)
-        workflow.add_node("format_report", self._format_report_node)
+        workflow.add_node("generate_structure", self._traced_node("generate_structure", self._generate_structure_node))
+        workflow.add_node("search_paragraph", self._traced_node("search_paragraph", self._search_paragraph_node))
+        workflow.add_node("summarize_paragraph", self._traced_node("summarize_paragraph", self._summarize_paragraph_node))
+        workflow.add_node("reflect_paragraph", self._traced_node("reflect_paragraph", self._reflect_paragraph_node))
+        workflow.add_node("update_summary", self._traced_node("update_summary", self._update_summary_node))
+        workflow.add_node("advance_paragraph", self._traced_node("advance_paragraph", self._advance_paragraph_node))
+        workflow.add_node("format_report", self._traced_node("format_report", self._format_report_node))
 
         # 设置入口点
         workflow.set_entry_point("generate_structure")
@@ -653,6 +695,14 @@ class LangGraphInsightAgent:
         # LangGraph 默认 recursion_limit=25 在多段落时会中途抛 RecursionError, 这里给足余量。
         recursion_limit = (2 * self.config.MAX_REFLECTIONS + 4) * 15 + 10
         config = {"configurable": {"thread_id": thread_id}, "recursion_limit": recursion_limit}
+        runtime_run = start_run(
+            self.engine_name,
+            query,
+            thread_id,
+            checkpoint_path=self.checkpoint_path,
+        )
+        self._active_run_id = runtime_run.get("run_id")
+        self._active_thread_id = thread_id
 
         try:
             # 创建初始状态
@@ -679,15 +729,21 @@ class LangGraphInsightAgent:
                 raise ValueError("未生成最终报告")
 
             # 保存报告
+            report_path = None
             if save_report:
-                self._save_report(query, final_report, thread_id)
+                report_path = self._save_report(query, final_report, thread_id)
+            finish_run(self._active_run_id, "completed", final_report_path=report_path)
 
             logger.info("LangGraph研究完成！")
             return final_report
 
         except Exception as e:
             logger.exception(f"研究过程中发生错误: {e}")
+            finish_run(self._active_run_id, "failed", error_summary=str(e))
             raise e
+        finally:
+            self._active_run_id = None
+            self._active_thread_id = None
 
     def resume_research(self, thread_id: str) -> str:
         """
@@ -703,6 +759,14 @@ class LangGraphInsightAgent:
 
         recursion_limit = (2 * self.config.MAX_REFLECTIONS + 4) * 15 + 10
         config = {"configurable": {"thread_id": thread_id}, "recursion_limit": recursion_limit}
+        runtime_run = start_run(
+            self.engine_name,
+            f"resume:{thread_id}",
+            thread_id,
+            checkpoint_path=self.checkpoint_path,
+        )
+        self._active_run_id = runtime_run.get("run_id")
+        self._active_thread_id = thread_id
 
         try:
             # 获取最新checkpoint
@@ -721,13 +785,18 @@ class LangGraphInsightAgent:
                 final_state = state
 
             if final_state and "final_report" in final_state:
+                finish_run(self._active_run_id, "completed")
                 return final_state["final_report"]
             else:
                 raise ValueError("未生成最终报告")
 
         except Exception as e:
             logger.exception(f"恢复研究失败: {e}")
+            finish_run(self._active_run_id, "failed", error_summary=str(e))
             raise e
+        finally:
+            self._active_run_id = None
+            self._active_thread_id = None
 
     def _save_report(self, query: str, report_content: str, thread_id: str):
         """保存报告到文件"""
@@ -746,6 +815,9 @@ class LangGraphInsightAgent:
             f.write(f"**Thread ID**: {thread_id}\n\n")
             f.write("---\n\n")
             f.write(report_content)
+
+        logger.info(f"Report saved to: {filepath}")
+        return filepath
 
         logger.info(f"报告已保存到: {filepath}")
 
