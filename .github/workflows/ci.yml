@@ -1,0 +1,61 @@
+name: Portfolio CI (no-key)
+
+# 无 key / 无 live crawler / 无外部数据库的作品集基线校验。
+# 真实 Postgres、Streamlit、浏览器烟测留作文档中的本地增强验证，不在此 workflow 中强制。
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  no-key-validation:
+    runs-on: ubuntu-latest
+    env:
+      PORTFOLIO_DEMO_MODE: "true"
+      ENABLE_LIVE_CRAWLERS: "false"
+      FORUM_HOST_API_KEY: ""
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Install dependencies
+        run: uv pip install --system -r requirements.txt
+
+      - name: Compile-check core packages
+        run: |
+          python -m compileall -q \
+            app.py \
+            InsightEngine \
+            MediaEngine \
+            QueryEngine \
+            ForumEngine \
+            MindSpider/schema \
+            SingleEngineApp \
+            tests \
+            MCPServer
+
+      - name: Run no-key test suite
+        run: |
+          python -m pytest \
+            tests/test_monitor.py \
+            tests/test_report_engine_sanitization.py \
+            tests/test_portfolio_seed.py \
+            tests/test_frontend_smoke.py \
+            tests/test_forum_moderator.py \
+            tests/test_mcp_server.py \
+            -q
+
+      - name: Verify MCP server CLI imports
+        run: python -m MCPServer.server --list
