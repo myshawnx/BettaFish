@@ -368,6 +368,13 @@ class LangGraphInsightAgent:
                 )
                 search_results = filtered_results
 
+            # L4: 空结果友好提示
+            if len(search_results) == 0:
+                logger.error(
+                    f"[L4] 段落{idx+1}搜索无结果。InsightEngine依赖数据库数据，"
+                    f"若数据库为空或无相关数据，无法生成有效分析。"
+                )
+
             logger.info(f"找到 {len(search_results)} 个结果")
 
             return {
@@ -497,6 +504,13 @@ class LangGraphInsightAgent:
                     f"(保留率{filter_stats['retention_rate']*100:.0f}%)"
                 )
                 search_results = filtered_results
+
+            # L4: 反思搜索空结果提示
+            if len(search_results) == 0:
+                logger.warning(
+                    f"[L4] 段落{idx+1}反思搜索无结果。"
+                    f"数据库可能缺少相关深化数据。"
+                )
 
             logger.info(f"反思搜索找到 {len(search_results)} 个结果")
 
@@ -763,6 +777,21 @@ class LangGraphInsightAgent:
 
         # 去重
         unique_results = self._deduplicate_results(all_results)
+
+        # L4: 检测空库或数据过少
+        result_count = len(unique_results)
+        if result_count == 0:
+            logger.warning(
+                f"[L4空库警告] InsightEngine数据库无'{query}'相关数据。"
+                f"InsightEngine默认无爬虫，数据库为空或数据量极少时搜索结果为空。"
+                f"建议：(1)运行爬虫填充数据库 (2)使用MediaEngine或QueryEngine替代"
+            )
+        elif result_count < 3:
+            logger.warning(
+                f"[L4数据过少] InsightEngine仅找到{result_count}条相关数据，"
+                f"可能因数据库数据量不足导致分析质量下降。"
+                f"建议运行爬虫或使用其他引擎。"
+            )
 
         # 构建响应
         from .tools import DBResponse
