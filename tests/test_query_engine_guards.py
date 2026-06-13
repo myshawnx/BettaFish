@@ -42,6 +42,13 @@ class DummyFormattingLLM:
         return "# OK\n\nFormatted report."
 
 
+class FailedTavilyAgency:
+    def basic_search_news(self, query, max_results=7):
+        from QueryEngine.tools import TavilyResponse
+
+        return TavilyResponse(query="搜索失败")
+
+
 def test_query_search_results_prompt_uses_compact_evidence():
     from QueryEngine.utils.text_processing import format_search_results_for_prompt
 
@@ -108,10 +115,23 @@ def test_query_add_error_does_not_build_fallback_for_search_errors():
     assert "paragraphs" not in update
 
 
+def test_query_search_failure_placeholder_raises_for_recovery():
+    from QueryEngine.langgraph_agent import LangGraphQueryAgent
+
+    agent = object.__new__(LangGraphQueryAgent)
+    agent.search_agency = FailedTavilyAgency()
+
+    with pytest.raises(RuntimeError, match="Tavily API"):
+        agent._execute_search_tool("basic_search_news", "topic", {})
+
+
 def test_data_inspection_error_is_not_retryable():
-    from utils.retry_helper import _is_non_retryable_exception
+    from utils.retry_helper import _is_non_retryable_exception, is_recoverable_api_error
 
     assert _is_non_retryable_exception(Exception("DataInspectionFailed: content rejected"))
+    assert _is_non_retryable_exception(Exception("insufficient_quota: quota exhausted"))
+    assert is_recoverable_api_error(Exception("AuthenticationError: invalid API key"))
+    assert not is_recoverable_api_error(Exception("GraphRecursionError: recursion limit reached"))
 
 
 @pytest.mark.parametrize(("agent_module_name", "state_module_name", "agent_class_name"), LANGGRAPH_ENGINES)
@@ -145,6 +165,53 @@ def test_langgraph_router_finishes_at_max_paragraphs(agent_module_name, state_mo
     decision = agent._should_continue_reflection(state)
 
     assert decision == "finish"
+
+
+@pytest.mark.parametrize(("agent_module_name", "state_module_name", "agent_class_name"), LANGGRAPH_ENGINES)
+def test_langgraph_error_update_forces_current_paragraph_to_converge(
+    agent_module_name,
+    state_module_name,
+    agent_class_name,
+):
+    agent_module = importlib.import_module(agent_module_name)
+    state_module = importlib.import_module(state_module_name)
+    agent = object.__new__(getattr(agent_module, agent_class_name))
+
+    state = state_module.create_initial_state("topic", max_reflections=2, max_paragraphs=2)
+    state["paragraphs"] = [
+        {"title": "First section", "content": "First section scope", "latest_summary": ""},
+        {"title": "Second section", "content": "Second section scope", "latest_summary": ""},
+    ]
+    state["current_paragraph_index"] = 0
+    state["current_reflection_count"] = 0
+
+    update = agent._terminal_error_update(state, "反思段落1失败: timeout")
+
+    assert update["current_reflection_count"] == state["max_reflections"]
+    assert "current_summary" in update
+    assert update["paragraphs"][0]["latest_summary"] == update["current_summary"]
+
+    state_after_error = {
+        **state,
+        **{key: value for key, value in update.items() if key not in {"errors", "messages"}},
+    }
+    state_after_error["errors"] = state["errors"] + update.get("errors", [])
+    state_after_error["messages"] = state["messages"] + update.get("messages", [])
+
+    assert agent._should_continue_reflection(state_after_error) == "next_paragraph"
+
+
+@pytest.mark.parametrize(("agent_module_name", "_state_module_name", "agent_class_name"), LANGGRAPH_ENGINES)
+def test_langgraph_recursion_limit_scales_with_configured_paragraphs(
+    agent_module_name,
+    _state_module_name,
+    agent_class_name,
+):
+    agent_module = importlib.import_module(agent_module_name)
+    agent_class = getattr(agent_module, agent_class_name)
+
+    assert agent_class._calculate_recursion_limit(max_reflections=2, max_paragraphs=20) > 130
+    assert agent_class._calculate_recursion_limit(max_reflections=2, max_paragraphs=5) >= 200
 
 
 @pytest.mark.parametrize("formatting_module_name", FORMATTING_NODES)

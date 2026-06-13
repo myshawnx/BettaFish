@@ -59,6 +59,7 @@ jobs:
             tests/test_agent_runtime.py \
             tests/test_mcp_server.py \
             tests/test_query_engine_guards.py \
+            tests/test_documented_commands.py \
             -q
 
       - name: Verify MCP server CLI imports

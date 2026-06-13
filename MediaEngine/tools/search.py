@@ -42,7 +42,7 @@ utils_dir = os.path.join(root_dir, 'utils')
 if utils_dir not in sys.path:
     sys.path.append(utils_dir)
 
-from retry_helper import with_graceful_retry, SEARCH_API_RETRY_CONFIG
+from retry_helper import is_recoverable_api_error, with_graceful_retry, SEARCH_API_RETRY_CONFIG
 
 # --- 1. 数据结构定义 ---
 from dataclasses import dataclass, field
@@ -105,7 +105,7 @@ class BochaMultimodalSearch:
 
     BOCHA_BASE_URL = settings.BOCHA_BASE_URL or "https://api.bocha.cn/v1/ai-search"
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None):
         """
         初始化客户端。
         Args:
@@ -115,6 +115,8 @@ class BochaMultimodalSearch:
             api_key = settings.BOCHA_WEB_SEARCH_API_KEY
             if not api_key:
                 raise ValueError("Bocha API Key未找到！请设置 BOCHA_API_KEY 环境变量或在初始化时提供")
+        if base_url:
+            self.BOCHA_BASE_URL = base_url
 
         self._headers = {
             'Authorization': f'Bearer {api_key}',
@@ -196,7 +198,10 @@ class BochaMultimodalSearch:
 
             response_dict = response.json()
             if response_dict.get("code") != 200:
-                logger.error(f"API返回错误: {response_dict.get('msg', '未知错误')}")
+                error_message = response_dict.get('msg', '未知错误')
+                logger.error(f"API返回错误: {error_message}")
+                if is_recoverable_api_error(Exception(f"Bocha API返回错误: {error_message}")):
+                    raise RuntimeError(f"Bocha API返回错误: {error_message}")
                 return BochaResponse(query=query)
 
             return self._parse_search_response(response_dict, query)
@@ -271,7 +276,7 @@ class AnspireAISearch:
     """
     ANSPIRE_BASE_URL = settings.ANSPIRE_BASE_URL or "https://plugin.anspire.cn/api/ntsearch/search"
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None):
         """
         初始化客户端。
         Args:
@@ -281,6 +286,8 @@ class AnspireAISearch:
             api_key = settings.ANSPIRE_API_KEY
             if not api_key:
                 raise ValueError("Anspire API Key未找到！请设置 ANSPIRE_API_KEY 环境变量或在初始化时提供")
+        if base_url:
+            self.ANSPIRE_BASE_URL = base_url
 
         self._headers = {
             'Authorization': f'Bearer {api_key}',

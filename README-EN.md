@@ -28,13 +28,22 @@ The default runtime is `PORTFOLIO_DEMO_MODE=true` and `ENABLE_LIVE_CRAWLERS=fals
 
 Core highlights:
 
-1. **Three independent LangGraph engines**: Insight / Media / Query each keep their own implementation while using StateGraph, checkpointing, and resume support.
-2. **Postgres insight path**: InsightEngine uses SQLAlchemy named params, table/field allowlists, and clear empty results when DB data is missing.
-3. **NLP and sentiment integration**: keyword optimization, sentiment analysis, and report summarization remain available with lazy model loading.
-4. **Structured forum moderator agent**: ForumEngine listens to agent output and, beyond the natural-language host speech, emits a deterministic verdict (topic / risk_level / action / rationale). It falls back to rules without an API key and is exposed via `GET /api/forum/moderator/status`.
-5. **MCP tool wrapping**: `MCPServer` wraps system status, forum status, insight search, and demo topics as unit-testable tools and ships a default standalone stdio MCP server (`uv run python -m MCPServer.server`).
-6. **Optional crawler integration**: MindSpider / MediaCrawler stay available only when `ENABLE_LIVE_CRAWLERS=true`.
-7. **No-key CI baseline**: `.github/workflows/ci.yml` runs compileall and the no-key test suite without any key, live crawler, or external database, keeping the portfolio reproducible.
+1. **Three independent LangGraph engines**: Insight / Media / Query each keep their own implementation while using StateGraph, SqliteSaver checkpointing, and `resume_research()` support.
+2. **Structured AgentRuntime traces**: LangGraph nodes write JSONL run/event records through `start_run` / `record_event` / `finish_run`, and both ForumEngine and MCP tools consume that stable event stream.
+3. **Postgres insight path**: InsightEngine uses SQLAlchemy named params, table/field allowlists, and clear empty results when DB data is missing.
+4. **NLP and sentiment integration**: keyword optimization, sentiment analysis, and report summarization remain available with lazy model loading.
+5. **Structured forum moderator agent**: ForumEngine consumes AgentRuntime events first, then falls back to text logs. Without `FORUM_HOST_API_KEY`, it still emits a deterministic topic / risk_level / action / rationale verdict through rules.
+6. **MCP tool wrapping**: `MCPServer` now ships portfolio-level stdio MCP tools for system status, forum status, Insight search, demo topics, and runtime runs/events.
+7. **Optional crawler integration**: MindSpider / MediaCrawler stay available only when `ENABLE_LIVE_CRAWLERS=true`.
+8. **No-key CI baseline**: `.github/workflows/ci.yml` runs compileall and the no-key test suite without any key, live crawler, or external database, keeping the portfolio reproducible.
+
+Demo path boundaries:
+
+| Path | Purpose | External dependencies | Best for |
+|------|---------|-----------------------|----------|
+| no-key smoke | Validate imports, Forum fallback, MCP tools, frontend status APIs, and seed-file shape | No API keys, no Postgres, no Playwright | CI and quick interview preflight |
+| Postgres seed demo | Load `sample_data/portfolio_insight_seed.json` and show deterministic Insight search plus the main console | Local Postgres / Docker db | Reproducible live interview demo |
+| full API-key demo | Enable real LLM, Tavily, Anspire/Bocha, and optional live crawlers | API keys, optionally Playwright and crawler accounts | Full business integration walkthrough |
 
 <div align="center">
 <img src="static/image/system_schematic.png" alt="banner" width="800">
@@ -87,8 +96,17 @@ Anspire Open is a leading infrastructure provider for the agent era. We offer de
 
 ```
 BettaFish/
+├── AgentRuntime/                           # JSONL run/event registry shared by LangGraph, Forum, and MCP
+│   ├── registry.py                         # start_run / record_event / finish_run plus status queries
+│   └── __init__.py
+├── MCPServer/                              # Portfolio-level MCP tools and stdio server
+│   ├── tools.py                            # System status, forum status, Insight search, demo topics, runtime runs/events
+│   ├── server.py                           # python -m MCPServer.server
+│   └── __init__.py
 ├── QueryEngine/                            # Domestic and international news breadth search Agent
 │   ├── agent.py                            # Agent main logic, coordinates search and analysis workflow
+│   ├── langgraph_agent.py                  # StateGraph + checkpoint + AgentRuntime tracing
+│   ├── langgraph_state.py                  # LangGraph TypedDict state definition
 │   ├── llms/                               # LLM interface wrapper
 │   ├── nodes/                              # Processing nodes: search, formatting, summarization, etc.
 │   ├── tools/                              # Domestic and international news search toolkit
@@ -98,6 +116,8 @@ BettaFish/
 │   └── ...
 ├── MediaEngine/                            # Powerful multimodal understanding Agent
 │   ├── agent.py                            # Agent main logic, handles video/image multimodal content
+│   ├── langgraph_agent.py                  # StateGraph + checkpoint + AgentRuntime tracing
+│   ├── langgraph_state.py                  # LangGraph TypedDict state definition
 │   ├── llms/                               # LLM interface wrapper
 │   ├── nodes/                              # Processing nodes: search, formatting, summarization, etc.
 │   ├── tools/                              # Multimodal search toolkit
@@ -107,6 +127,8 @@ BettaFish/
 │   └── ...
 ├── InsightEngine/                          # Private database mining Agent
 │   ├── agent.py                            # Agent main logic, coordinates database queries and analysis
+│   ├── langgraph_agent.py                  # StateGraph + checkpoint + AgentRuntime tracing
+│   ├── langgraph_state.py                  # LangGraph TypedDict state definition
 │   ├── llms/                               # LLM interface wrapper
 │   │   └── base.py                         # Unified OpenAI-compatible client
 │   ├── nodes/                              # Processing nodes: search, formatting, summarization, etc.
@@ -215,6 +237,9 @@ BettaFish/
 │       ├── predict.py
 │       └── ...
 ├── SingleEngineApp/                        # Individual Agent Streamlit applications
+│   ├── query_engine_langgraph_streamlit_app.py   # QueryEngine LangGraph app
+│   ├── media_engine_langgraph_streamlit_app.py   # MediaEngine LangGraph app
+│   ├── insight_engine_langgraph_streamlit_app.py # InsightEngine LangGraph app
 │   ├── query_engine_streamlit_app.py       # QueryEngine standalone app
 │   ├── media_engine_streamlit_app.py       # MediaEngine standalone app
 │   └── insight_engine_streamlit_app.py     # InsightEngine standalone app
@@ -676,12 +701,12 @@ We welcome all forms of contributions!
 
 ## 🦖 Next Development Plan
 
-The system has now completed the final prediction step! Visit 【MiroFish - Predict Everything】: https://github.com/666ghj/MiroFish
+The main line is to preserve the reproducible no-key Python Agent portfolio baseline while improving the full business demo without breaking the default path:
 
-<div align="center">
-<img src="static/image/MiroFish_logo_compressed.jpeg" alt="banner" width="800">
-<img src="static/image/banner_compressed.png" alt="banner" width="800">
-</div>
+1. Add a smoother one-command setup for the Postgres seed demo.
+2. Build a runtime timeline or observability surface on top of AgentRuntime events.
+3. Add configuration self-checks, missing-key hints, and real search API examples for the full API-key demo.
+4. Explore RAG / hybrid retrieval only as an optional enhancement, keeping CI independent from external vector stores or model services.
 
 ## ⚠️ Disclaimer
 

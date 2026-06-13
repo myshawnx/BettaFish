@@ -29,13 +29,22 @@
 
 核心能力：
 
-1. **三引擎 LangGraph 编排**：Insight / Media / Query 各自保留独立代码副本，使用 StateGraph、checkpoint 和断点恢复。
-2. **Postgres 数据洞察**：InsightEngine 通过 SQLAlchemy named params 查询样例业务数据，兼容 Postgres，空库/DB 不可用时返回明确空结果。
-3. **NLP 与情感分析集成**：保留情感分析、关键词优化和报告总结链路，模型依赖按需惰性加载。
-4. **论坛主持人 Agent（结构化）**：ForumEngine 监听三个 Agent 输出，除自然语言主持人发言外，还输出确定性的结构化判断（topic / risk_level / action / rationale），无 key 时走规则 fallback，只读接口 `GET /api/forum/moderator/status`。
-5. **MCP 工具包装**：`MCPServer` 把系统状态、论坛状态、洞察搜索、演示主题包装成可单测工具，并默认提供独立 stdio MCP server（`uv run python -m MCPServer.server`）。
-6. **可选爬虫集成**：MindSpider / MediaCrawler 保留为 optional integration，只有 `ENABLE_LIVE_CRAWLERS=true` 时才进入启动路径。
-7. **无 key CI 基线**：`.github/workflows/ci.yml` 在无 key、无 live crawler、无外部数据库的条件下跑 compileall 与 no-key 测试套件，保证作品集随时可复现。
+1. **三引擎 LangGraph 编排**：Insight / Media / Query 各自保留独立代码副本，使用 StateGraph、SqliteSaver checkpoint 和 `resume_research()` 断点恢复。
+2. **AgentRuntime 结构化运行轨迹**：LangGraph 节点通过 `start_run` / `record_event` / `finish_run` 写入 JSONL run/event registry，ForumEngine 和 MCP 工具都能消费这条稳定事件流。
+3. **Postgres 数据洞察**：InsightEngine 通过 SQLAlchemy named params 查询样例业务数据，兼容 Postgres，空库/DB 不可用时返回明确空结果。
+4. **NLP 与情感分析集成**：保留情感分析、关键词优化和报告总结链路，模型依赖按需惰性加载。
+5. **论坛主持人 Agent（结构化）**：ForumEngine 优先消费 AgentRuntime 事件，再回退解析日志；无 `FORUM_HOST_API_KEY` 时走规则 fallback，仍输出 topic / risk_level / action / rationale。
+6. **MCP 工具包装**：`MCPServer` 已提供作品集级 stdio MCP server，工具覆盖系统状态、论坛状态、Insight 搜索、demo topics、runtime runs/events。
+7. **可选爬虫集成**：MindSpider / MediaCrawler 保留为 optional integration，只有 `ENABLE_LIVE_CRAWLERS=true` 时才进入启动路径。
+8. **无 key CI 基线**：`.github/workflows/ci.yml` 在无 key、无 live crawler、无外部数据库的条件下跑 compileall 与 no-key 测试套件，保证作品集随时可复现。
+
+演示路径边界：
+
+| 路径 | 目的 | 需要的外部依赖 | 适合场景 |
+|------|------|----------------|----------|
+| no-key smoke | 验证导入、Forum fallback、MCP 工具、前端状态接口和 seed 文件形状 | 无 API key、无 Postgres、无 Playwright | CI、快速面试预检 |
+| Postgres seed demo | 用 `sample_data/portfolio_insight_seed.json` 写入确定性数据，展示 Insight 数据检索和主控制台 | 本地 Postgres / Docker db | 面试现场可复现演示 |
+| full API-key demo | 启用真实 LLM、Tavily、Anspire/Bocha，可选 live crawlers | API key，必要时 Playwright 和爬虫账号 | 完整业务集成展示 |
 
 <div align="center">
 <img src="static/image/system_schematic.png" alt="banner" width="800">
@@ -88,8 +97,17 @@ LLM模型API赞助：<a href="https://aihubmix.com/?aff=8Ds9" target="_blank"><i
 
 ```
 BettaFish/
+├── AgentRuntime/                           # JSONL run/event registry，供 LangGraph、Forum、MCP 共用
+│   ├── registry.py                         # start_run / record_event / finish_run 与状态查询
+│   └── __init__.py
+├── MCPServer/                              # 作品集级 MCP 工具与 stdio server
+│   ├── tools.py                            # 系统状态、论坛状态、Insight 搜索、demo topics、runtime runs/events
+│   ├── server.py                           # python -m MCPServer.server
+│   └── __init__.py
 ├── QueryEngine/                            # 国内外新闻广度搜索Agent
 │   ├── agent.py                            # Agent主逻辑，协调搜索与分析流程
+│   ├── langgraph_agent.py                  # StateGraph + checkpoint + AgentRuntime 打点
+│   ├── langgraph_state.py                  # LangGraph TypedDict状态定义
 │   ├── llms/                               # LLM接口封装
 │   ├── nodes/                              # 处理节点：搜索、格式化、总结等
 │   ├── tools/                              # 国内外新闻搜索工具集
@@ -99,6 +117,8 @@ BettaFish/
 │   └── ...
 ├── MediaEngine/                            # 强大的多模态理解Agent
 │   ├── agent.py                            # Agent主逻辑，处理视频/图片等多模态内容
+│   ├── langgraph_agent.py                  # StateGraph + checkpoint + AgentRuntime 打点
+│   ├── langgraph_state.py                  # LangGraph TypedDict状态定义
 │   ├── llms/                               # LLM接口封装
 │   ├── nodes/                              # 处理节点：搜索、格式化、总结等
 │   ├── tools/                              # 多模态搜索工具集
@@ -108,6 +128,8 @@ BettaFish/
 │   └── ...
 ├── InsightEngine/                          # 私有数据库挖掘Agent
 │   ├── agent.py                            # Agent主逻辑，协调数据库查询与分析
+│   ├── langgraph_agent.py                  # StateGraph + checkpoint + AgentRuntime 打点
+│   ├── langgraph_state.py                  # LangGraph TypedDict状态定义
 │   ├── llms/                               # LLM接口封装
 │   │   └── base.py                         # 统一的OpenAI兼容客户端
 │   ├── nodes/                              # 处理节点：搜索、格式化、总结等
@@ -216,6 +238,9 @@ BettaFish/
 │       ├── predict.py
 │       └── ...
 ├── SingleEngineApp/                        # 单独Agent的Streamlit应用
+│   ├── query_engine_langgraph_streamlit_app.py   # QueryEngine LangGraph独立应用
+│   ├── media_engine_langgraph_streamlit_app.py   # MediaEngine LangGraph独立应用
+│   ├── insight_engine_langgraph_streamlit_app.py # InsightEngine LangGraph独立应用
 │   ├── query_engine_streamlit_app.py       # QueryEngine独立应用
 │   ├── media_engine_streamlit_app.py       # MediaEngine独立应用
 │   └── insight_engine_streamlit_app.py     # InsightEngine独立应用
@@ -681,12 +706,12 @@ class DeepSearchAgent:
 
 ## 🦖 下一步开发计划
 
-现在系统完成了最后一步预测！访问查看【MiroFish-预测万物】：https://github.com/666ghj/MiroFish
+当前主线是保持 Python Agent 作品集的 no-key 可复现基线，并在不破坏默认演示路径的前提下增强完整业务体验：
 
-<div align="center">
-<img src="static/image/MiroFish_logo_compressed.jpeg" alt="banner" width="800">
-<img src="static/image/banner_compressed.png" alt="banner" width="800">
-</div>
+1. 完善 Postgres seed demo 的一键初始化与本地演示脚本。
+2. 基于 AgentRuntime 事件补充运行时间线和可观测性界面。
+3. 为 full API-key demo 增加配置自检、缺 key 提示和真实搜索 API 示例。
+4. 按需探索 RAG / hybrid retrieval，但保持 CI 不依赖外部向量库或模型服务。
 
 ## ⚠️ 免责声明
 

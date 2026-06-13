@@ -55,17 +55,125 @@ class RetryConfig:
 DEFAULT_RETRY_CONFIG = RetryConfig()
 
 
+NON_RETRYABLE_PROVIDER_MARKERS = (
+    "data_inspection_failed",
+    "datainspectionfailed",
+    "invalid_request_error",
+    "content_filter",
+    "content management policy",
+    "insufficient_quota",
+    "quota_exceeded",
+    "quota exceeded",
+    "exceeded your current quota",
+    "billing_hard_limit",
+    "invalid_api_key",
+    "invalid api key",
+    "incorrect api key",
+    "api key is invalid",
+    "authenticationerror",
+    "authentication failed",
+    "unauthorized",
+    "permission denied",
+    "forbidden",
+    "rate_limit_exceeded",
+    "rate limit exceeded",
+    "too many requests",
+    "401",
+    "403",
+    "429",
+    "余额不足",
+    "额度不足",
+    "限流",
+    "鉴权",
+    "认证失败",
+    "密钥无效",
+)
+
+
+RECOVERABLE_API_ERROR_MARKERS = (
+    "api key",
+    "apikey",
+    "invalid key",
+    "invalid_api_key",
+    "incorrect api key",
+    "authentication",
+    "authenticationerror",
+    "unauthorized",
+    "permission denied",
+    "forbidden",
+    "401",
+    "403",
+    "insufficient_quota",
+    "quota_exceeded",
+    "quota exceeded",
+    "exceeded your current quota",
+    "billing_hard_limit",
+    "rate_limit_exceeded",
+    "rate limit",
+    "too many requests",
+    "429",
+    "apiconnectionerror",
+    "api connection",
+    "apitimeouterror",
+    "api timeout",
+    "failed to connect",
+    "connection refused",
+    "connection error",
+    "connect timeout",
+    "read timeout",
+    "timed out",
+    "max retries exceeded",
+    "service unavailable",
+    "bad gateway",
+    "gateway timeout",
+    "ssl",
+    "certificate",
+    "proxy",
+    "tavily",
+    "bocha",
+    "anspire",
+    "余额不足",
+    "额度不足",
+    "额度",
+    "限流",
+    "鉴权",
+    "认证",
+    "密钥",
+    "连接失败",
+    "超时",
+)
+
+
+NON_RECOVERABLE_API_ERROR_MARKERS = (
+    "graphrecursionerror",
+    "recursion limit",
+    "data_inspection_failed",
+    "datainspectionfailed",
+    "content_filter",
+    "content management policy",
+)
+
+
+def _exception_text(exc: Exception) -> str:
+    parts = [type(exc).__name__, str(exc)]
+    cause = getattr(exc, "__cause__", None) or getattr(exc, "__context__", None)
+    if cause is not None and cause is not exc:
+        parts.extend([type(cause).__name__, str(cause)])
+    return " ".join(part for part in parts if part).lower()
+
+
 def _is_non_retryable_exception(exc: Exception) -> bool:
     """Return True for deterministic provider rejections that retries cannot fix."""
-    text = str(exc).lower()
-    non_retryable_markers = (
-        "data_inspection_failed",
-        "datainspectionfailed",
-        "invalid_request_error",
-        "content_filter",
-        "content management policy",
-    )
-    return any(marker in text for marker in non_retryable_markers)
+    text = _exception_text(exc)
+    return any(marker in text for marker in NON_RETRYABLE_PROVIDER_MARKERS)
+
+
+def is_recoverable_api_error(exc: Exception) -> bool:
+    """Return True when a failure can plausibly be fixed by updating API settings."""
+    text = _exception_text(exc)
+    if any(marker in text for marker in NON_RECOVERABLE_API_ERROR_MARKERS):
+        return False
+    return any(marker in text for marker in RECOVERABLE_API_ERROR_MARKERS)
 
 
 def with_retry(config: RetryConfig = None):

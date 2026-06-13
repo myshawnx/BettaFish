@@ -23,6 +23,7 @@ from loguru import logger
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.sqlite import SqliteSaver
 from AgentRuntime import build_langgraph_payload, finish_run, record_event, start_run
+from utils.retry_helper import is_recoverable_api_error
 
 from .langgraph_state import (
     QueryGraphState,
@@ -111,6 +112,55 @@ class LangGraphQueryAgent:
 
         logger.info(f"LangGraph QueryEngine已初始化")
         logger.info(f"Checkpoint路径: {checkpoint_path}")
+
+    @staticmethod
+    def _calculate_recursion_limit(max_reflections: Any, max_paragraphs: Any) -> int:
+        """Return a conservative LangGraph recursion limit for paragraph loops."""
+        try:
+            reflections = max(0, int(max_reflections))
+        except (TypeError, ValueError):
+            reflections = 2
+        try:
+            paragraphs = max(1, int(max_paragraphs))
+        except (TypeError, ValueError):
+            paragraphs = 5
+
+        # Each paragraph can visit search, summarize, reflect/update pairs,
+        # advance, plus checkpoint bookkeeping. Keep a floor for UI runs.
+        return max(200, (2 * reflections + 8) * paragraphs + 50)
+
+    def _terminal_error_update(self, state: QueryGraphState, error: str) -> Dict:
+        """Record an error and force the current paragraph loop to converge."""
+        update = add_error(state, error)
+        try:
+            update["current_reflection_count"] = max(
+                int(state.get("current_reflection_count", 0)),
+                int(state.get("max_reflections", 0)),
+            )
+        except (TypeError, ValueError):
+            update["current_reflection_count"] = state.get("current_reflection_count", 0)
+
+        idx = state.get("current_paragraph_index", 0)
+        paragraphs = state.get("paragraphs") or []
+        has_summary = bool(state.get("current_summary"))
+        if isinstance(idx, int) and 0 <= idx < len(paragraphs):
+            has_summary = has_summary or bool(paragraphs[idx].get("latest_summary"))
+            if not has_summary and "paragraphs" not in update:
+                fallback_summary = (
+                    f"本段研究未能完成自动总结，已记录错误并跳过本段反思。\n\n"
+                    f"错误信息: {error}"
+                )
+                updated_paragraphs = paragraphs.copy()
+                updated_paragraphs[idx] = {
+                    **updated_paragraphs[idx],
+                    "latest_summary": fallback_summary,
+                }
+                update["paragraphs"] = updated_paragraphs
+                update["current_summary"] = fallback_summary
+
+        message = f"段落{idx + 1 if isinstance(idx, int) else ''}发生错误，停止本段反思并继续后续流程"
+        update["messages"] = update.get("messages", []) + [message]
+        return update
 
     def _traced_node(self, node_name: str, handler):
         """Wrap a LangGraph node with best-effort runtime event tracing."""
@@ -247,6 +297,8 @@ class LangGraphQueryAgent:
 
         except Exception as e:
             logger.exception(f"生成报告结构失败: {e}")
+            if is_recoverable_api_error(e):
+                raise
             return add_error(state, f"生成报告结构失败: {str(e)}")
 
     def _search_paragraph_node(self, state: QueryGraphState) -> Dict:
@@ -302,6 +354,8 @@ class LangGraphQueryAgent:
 
         except Exception as e:
             logger.exception(f"搜索段落失败: {e}")
+            if is_recoverable_api_error(e):
+                raise
             return add_error(state, f"搜索段落{idx+1}失败: {str(e)}")
 
     def _summarize_paragraph_node(self, state: QueryGraphState) -> Dict:
@@ -358,6 +412,8 @@ class LangGraphQueryAgent:
 
         except Exception as e:
             logger.exception(f"总结段落失败: {e}")
+            if is_recoverable_api_error(e):
+                raise
             return add_error(state, f"总结段落{idx+1}失败: {str(e)}")
 
     def _reflect_paragraph_node(self, state: QueryGraphState) -> Dict:
@@ -408,7 +464,9 @@ class LangGraphQueryAgent:
 
         except Exception as e:
             logger.exception(f"反思段落失败: {e}")
-            return add_error(state, f"反思段落{idx+1}失败: {str(e)}")
+            if is_recoverable_api_error(e):
+                raise
+            return self._terminal_error_update(state, f"反思段落{idx+1}失败: {str(e)}")
 
     def _update_summary_node(self, state: QueryGraphState) -> Dict:
         """
@@ -466,7 +524,9 @@ class LangGraphQueryAgent:
 
         except Exception as e:
             logger.exception(f"更新总结失败: {e}")
-            return add_error(state, f"更新段落{idx+1}总结失败: {str(e)}")
+            if is_recoverable_api_error(e):
+                raise
+            return self._terminal_error_update(state, f"更新段落{idx+1}总结失败: {str(e)}")
 
     def _advance_paragraph_node(self, state: QueryGraphState) -> Dict:
         """
@@ -535,6 +595,8 @@ class LangGraphQueryAgent:
 
         except Exception as e:
             logger.exception(f"格式化报告失败: {e}")
+            if is_recoverable_api_error(e):
+                raise
             # 使用备用方法
             final_report = self.report_formatting_node_impl.format_report_manually(
                 report_data, state["report_title"]
@@ -660,24 +722,28 @@ class LangGraphQueryAgent:
 
         if tool_name == "basic_search_news":
             max_results = kwargs.get("max_results", 7)
-            return self.search_agency.basic_search_news(query, max_results)
+            response = self.search_agency.basic_search_news(query, max_results)
         elif tool_name == "deep_search_news":
-            return self.search_agency.deep_search_news(query)
+            response = self.search_agency.deep_search_news(query)
         elif tool_name == "search_news_last_24_hours":
-            return self.search_agency.search_news_last_24_hours(query)
+            response = self.search_agency.search_news_last_24_hours(query)
         elif tool_name == "search_news_last_week":
-            return self.search_agency.search_news_last_week(query)
+            response = self.search_agency.search_news_last_week(query)
         elif tool_name == "search_images_for_news":
-            return self.search_agency.search_images_for_news(query)
+            response = self.search_agency.search_images_for_news(query)
         elif tool_name == "search_news_by_date":
             start_date = kwargs.get("start_date")
             end_date = kwargs.get("end_date")
             if not start_date or not end_date:
                 raise ValueError("search_news_by_date工具需要start_date和end_date参数")
-            return self.search_agency.search_news_by_date(query, start_date, end_date)
+            response = self.search_agency.search_news_by_date(query, start_date, end_date)
         else:
             logger.warning(f"未知的搜索工具: {tool_name}，使用默认基础搜索")
-            return self.search_agency.basic_search_news(query)
+            response = self.search_agency.basic_search_news(query)
+
+        if getattr(response, "query", None) == "搜索失败":
+            raise RuntimeError("Tavily API 调用失败，已保留 checkpoint，可更新 API 配置后继续")
+        return response
 
     def _convert_search_results(self, search_response) -> List[Dict]:
         """转换Tavily搜索结果为字典格式 (上限10条)"""
@@ -725,7 +791,10 @@ class LangGraphQueryAgent:
 
         # 结构节点由 LLM 决定段落数(常 4-7 段), 每段约需 (2*反思次数+4) 步;
         # LangGraph 默认 recursion_limit=25 在多段落时会中途抛 RecursionError, 这里给足余量。
-        recursion_limit = (2 * self.config.MAX_REFLECTIONS + 4) * 15 + 10
+        recursion_limit = self._calculate_recursion_limit(
+            self.config.MAX_REFLECTIONS,
+            self.config.MAX_PARAGRAPHS,
+        )
         config = {"configurable": {"thread_id": thread_id}, "recursion_limit": recursion_limit}
         runtime_run = start_run(
             self.engine_name,
@@ -789,7 +858,10 @@ class LangGraphQueryAgent:
         """
         logger.info(f"从checkpoint恢复研究: {thread_id}")
 
-        recursion_limit = (2 * self.config.MAX_REFLECTIONS + 4) * 15 + 10
+        recursion_limit = self._calculate_recursion_limit(
+            self.config.MAX_REFLECTIONS,
+            self.config.MAX_PARAGRAPHS,
+        )
         config = {"configurable": {"thread_id": thread_id}, "recursion_limit": recursion_limit}
         runtime_run = start_run(
             self.engine_name,

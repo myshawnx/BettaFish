@@ -42,6 +42,8 @@ def test_main_page_and_status_endpoints_render_without_startup(monkeypatch):
 
     assert index_response.status_code == 200
     assert b"BettaFish" in index_response.data or b"Agent" in index_response.data
+    assert b"forumOpenReportButton" in index_response.data
+    assert b"openReportFromForum" in index_response.data
 
     assert app_status_response.status_code == 200
     app_status = app_status_response.get_json()

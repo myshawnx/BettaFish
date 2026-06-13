@@ -1,5 +1,17 @@
 # BettaFish-new Python Agent Portfolio 快速开始
 
+## 三条演示路径边界
+
+| 路径 | 目标 | 需要什么 | 不包含什么 |
+|------|------|----------|------------|
+| no-key smoke | 证明代码在无 key、无数据库、无 live crawler 下可导入、可单测、可列出 MCP 工具 | Python 3.11、`uv pip install -r requirements.txt` | 不启动真实三引擎研究，不连接外部搜索 API |
+| Postgres seed demo | 用确定性样例数据展示主控制台、Insight 搜索、Forum fallback 和作品集状态接口 | Docker/Postgres，`sample_data/portfolio_insight_seed.json` | 不要求实时爬虫，不要求 Playwright 账号 |
+| full API-key demo | 展示真实 LLM、Tavily、Anspire/Bocha 与可选爬虫集成 | 各引擎 API key，必要时 Playwright 和爬虫账号 | 不作为 CI 基线 |
+
+默认路径是前两条：先跑 no-key smoke，面试现场再用 Postgres seed demo。实时 MindSpider / MediaCrawler 仍是可选增强路径。
+
+---
+
 ## 5分钟可复现演示路径
 
 默认演示路径不启动实时爬虫，也不要求 Playwright、外部爬虫账号或模型下载。先用确定性样例数据写入 Postgres，再启动 Flask 主控制台，三个 LangGraph Streamlit 子应用会通过 iframe 嵌入。
@@ -61,20 +73,37 @@ ENABLE_LIVE_CRAWLERS=true
 
 ## 无 Docker / 无 key 的最低验证路径
 
-如果面试官/招聘方不方便启动 Postgres 或配置任何 API key，可以只跑 no-key 测试套件验证核心能力（LangGraph 三引擎可导入、Forum Moderator fallback、MCP 工具可调用、前端接口可渲染）：
+如果面试官/招聘方不方便启动 Postgres 或配置任何 API key，可以只跑 no-key 测试套件验证核心能力（LangGraph 三引擎可导入、AgentRuntime JSONL registry、Forum Moderator fallback、MCP 工具可调用、前端接口可渲染）：
 
 注意：no-key 路径只是 smoke/CI 基线。真实三引擎分析仍需要 LLM key，以及 QueryEngine 的 Tavily key、MediaEngine 的 Anspire/Bocha key。
 
 ```bash
-PORTFOLIO_DEMO_MODE=true ENABLE_LIVE_CRAWLERS=false uv run python -m pytest \
+PORTFOLIO_DEMO_MODE=true ENABLE_LIVE_CRAWLERS=false FORUM_HOST_API_KEY= uv run python -m compileall -q \
+  app.py \
+  InsightEngine \
+  MediaEngine \
+  QueryEngine \
+  ForumEngine \
+  AgentRuntime \
+  MindSpider/schema \
+  SingleEngineApp \
+  tests \
+  MCPServer
+
+PORTFOLIO_DEMO_MODE=true ENABLE_LIVE_CRAWLERS=false FORUM_HOST_API_KEY= uv run python -m pytest \
   tests/test_monitor.py \
   tests/test_report_engine_sanitization.py \
   tests/test_portfolio_seed.py \
   tests/test_langgraph_imports.py \
   tests/test_frontend_smoke.py \
   tests/test_forum_moderator.py \
+  tests/test_agent_runtime.py \
   tests/test_mcp_server.py \
+  tests/test_query_engine_guards.py \
+  tests/test_documented_commands.py \
   -q
+
+PORTFOLIO_DEMO_MODE=true ENABLE_LIVE_CRAWLERS=false FORUM_HOST_API_KEY= uv run python -m MCPServer.server --list
 ```
 
 这组测试不依赖 Postgres、API key、Playwright 或 MediaCrawler，CI（`.github/workflows/ci.yml`）跑的也是同一组校验。
@@ -105,10 +134,16 @@ curl http://127.0.0.1:5000/api/forum/moderator/status
 uv run python -m MCPServer.server --list
 uv run python -m MCPServer.server --call portfolio_demo_topics
 uv run python -m MCPServer.server --call portfolio_search_insights --args '{"topic": "低空物流", "limit": 5}'
+uv run python -m MCPServer.server --call portfolio_agent_runtime_status
+uv run python -m MCPServer.server --call portfolio_agent_runs --args '{"limit": 5}'
+uv run python -m MCPServer.server --call portfolio_agent_events --args '{"engine": "media", "limit": 10}'
 ```
 
 可用工具：
 
+- `portfolio_agent_runtime_status`：AgentRuntime 汇总状态，包括 active/failed run、latest_by_engine、最新事件和 JSONL 路径。
+- `portfolio_agent_runs`：最近 LangGraph run 记录，包含 engine、query、thread_id、checkpoint_path、final_report_path 和状态。
+- `portfolio_agent_events`：最近结构化事件，可按 `run_id`、`engine` 和 `limit` 过滤。
 - `portfolio_system_status`：demo 模式、爬虫开关、数据库配置摘要、核心 endpoint。
 - `portfolio_forum_status`：论坛日志摘要与 Moderator 最新结构化状态。
 - `portfolio_search_insights`：InsightEngine 确定性话题搜索（优先 seed 数据；DB 不可用返回明确错误）。
@@ -508,8 +543,8 @@ LANGGRAPH_CONFIG = {
 **下一步**:
 1. 在实际项目中使用LangGraph版本
 2. 收集反馈和优化
-3. 考虑Phase 2: MCP标准化
-4. 考虑Phase 3: RAG增强检索
+3. 用 MCP runtime 工具观察 run/event 轨迹
+4. 按需增强 full API-key demo 或 RAG 检索路径
 
 ---
 

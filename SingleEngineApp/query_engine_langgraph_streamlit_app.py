@@ -40,6 +40,11 @@ from QueryEngine.langgraph_state import create_initial_state
 from QueryEngine.utils.config import Settings
 from AgentRuntime import finish_run, start_run
 from config import settings
+from SingleEngineApp.langgraph_recovery import (
+    is_recoverable_api_error,
+    normalize_error_text,
+    render_api_recovery_form,
+)
 from utils.github_issues import error_with_issue_link
 
 
@@ -62,6 +67,70 @@ STAGE_FRACTION = {
     "update_summary": 0.8,
     "advance_paragraph": 1.0,
 }
+
+RECOVERY_STATE_KEY = "query_langgraph_api_recovery"
+
+
+def _setting_value(values: dict | None, key: str, default=None):
+    if values and key in values:
+        return values[key]
+    return getattr(settings, key, default)
+
+
+def build_query_config(values: dict | None = None) -> Settings:
+    """Build a QueryEngine Settings object from submitted values plus current settings."""
+    return Settings(
+        QUERY_ENGINE_API_KEY=_setting_value(values, "QUERY_ENGINE_API_KEY"),
+        QUERY_ENGINE_BASE_URL=_setting_value(values, "QUERY_ENGINE_BASE_URL"),
+        QUERY_ENGINE_MODEL_NAME=_setting_value(values, "QUERY_ENGINE_MODEL_NAME") or "deepseek-chat",
+        TAVILY_API_KEY=_setting_value(values, "TAVILY_API_KEY"),
+        MAX_REFLECTIONS=2,
+        SEARCH_CONTENT_MAX_LENGTH=20000,
+        OUTPUT_DIR="query_engine_streamlit_reports",
+    )
+
+
+def _api_recovery_fields(values: dict | None = None):
+    return [
+        {
+            "key": "QUERY_ENGINE_API_KEY",
+            "label": "Query LLM API Key",
+            "value": _setting_value(values, "QUERY_ENGINE_API_KEY"),
+            "secret": True,
+            "required": True,
+        },
+        {
+            "key": "QUERY_ENGINE_BASE_URL",
+            "label": "Query LLM Base URL",
+            "value": _setting_value(values, "QUERY_ENGINE_BASE_URL"),
+        },
+        {
+            "key": "QUERY_ENGINE_MODEL_NAME",
+            "label": "Query LLM Model",
+            "value": _setting_value(values, "QUERY_ENGINE_MODEL_NAME") or "deepseek-chat",
+            "required": True,
+        },
+        {
+            "key": "TAVILY_API_KEY",
+            "label": "Tavily API Key",
+            "value": _setting_value(values, "TAVILY_API_KEY"),
+            "secret": True,
+            "required": True,
+        },
+    ]
+
+
+def _remember_api_recovery(query: str, thread_id: str | None, error, mode: str = "resume"):
+    st.session_state[RECOVERY_STATE_KEY] = {
+        "query": query,
+        "thread_id": thread_id,
+        "error": normalize_error_text(error),
+        "mode": mode,
+    }
+
+
+def _clear_api_recovery():
+    st.session_state.pop(RECOVERY_STATE_KEY, None)
 
 
 def main():
@@ -88,11 +157,6 @@ def main():
         auto_query = query_params.get('query', [''])[0]
         auto_search = query_params.get('auto_search', ['false'])[0].lower() == 'true'
 
-    # ----- 配置被硬编码 (与原版一致, 从全局 settings 读取) -----
-    model_name = settings.QUERY_ENGINE_MODEL_NAME or "deepseek-chat"
-    max_reflections = 2
-    max_content_length = 20000
-
     # 如果有自动查询，使用它作为默认值，否则显示占位符
     display_query = auto_query if auto_query else "等待从主页面接收分析内容..."
 
@@ -118,39 +182,99 @@ def main():
 
     # 验证配置
     if start_research:
+        _clear_api_recovery()
         if not query.strip():
             st.error("请输入研究查询")
             logger.error("请输入研究查询")
             return
 
-        # 检查配置中的LLM密钥
+        missing = []
         if not settings.QUERY_ENGINE_API_KEY:
-            st.error("请在您的环境变量中设置QUERY_ENGINE_API_KEY")
-            logger.error("请在您的环境变量中设置QUERY_ENGINE_API_KEY")
-            return
-        # Query Agent 依赖 Tavily 进行网络搜索
+            missing.append("QUERY_ENGINE_API_KEY")
         if not settings.TAVILY_API_KEY:
-            st.error("请在您的环境变量中设置TAVILY_API_KEY")
-            logger.error("请在您的环境变量中设置TAVILY_API_KEY")
-            return
+            missing.append("TAVILY_API_KEY")
 
-        # 创建Settings配置 (字段必须用大写, 以适配Settings类; 与原版字段一致)
-        config = Settings(
-            QUERY_ENGINE_API_KEY=settings.QUERY_ENGINE_API_KEY,
-            QUERY_ENGINE_BASE_URL=settings.QUERY_ENGINE_BASE_URL,
-            QUERY_ENGINE_MODEL_NAME=model_name,
-            TAVILY_API_KEY=settings.TAVILY_API_KEY,
-            MAX_REFLECTIONS=max_reflections,
-            SEARCH_CONTENT_MAX_LENGTH=max_content_length,
-            OUTPUT_DIR="query_engine_streamlit_reports"
-        )
+        if missing:
+            message = "缺少必要 API 配置: " + ", ".join(missing)
+            st.error(message)
+            logger.error(message)
+            _remember_api_recovery(query, None, message, mode="start")
+        else:
+            execute_research(query, build_query_config())
 
-        # 执行研究
-        execute_research(query, config)
+    render_pending_api_recovery()
 
 
-def execute_research(query: str, config: Settings):
+def render_pending_api_recovery():
+    recovery = st.session_state.get(RECOVERY_STATE_KEY)
+    if not recovery:
+        return
+
+    mode = recovery.get("mode", "resume")
+    submit_label = "保存配置并继续研究" if mode == "resume" else "保存配置并开始研究"
+    merged_values = render_api_recovery_form(
+        form_key="query_api_recovery_form",
+        engine_label="Query Agent",
+        fields=_api_recovery_fields(),
+        error_text=recovery.get("error", ""),
+        thread_id=recovery.get("thread_id"),
+        submit_label=submit_label,
+    )
+    if merged_values is None:
+        return
+
+    query = recovery.get("query") or ""
+    thread_id = recovery.get("thread_id")
+    config = build_query_config(merged_values)
+    _clear_api_recovery()
+    if mode == "resume" and thread_id:
+        completed = resume_research(query, thread_id, config)
+    else:
+        completed = execute_research(query, config)
+    if completed:
+        _clear_api_recovery()
+
+
+def _stream_graph(agent, graph_config: dict, initial_state, progress_bar, status_text) -> dict:
+    """Stream LangGraph updates and return the accumulated final state."""
+    total_paragraphs = 1
+    current_idx = 0
+    for chunk in agent.graph.stream(initial_state, graph_config, stream_mode="updates"):
+        for node_name, node_update in chunk.items():
+            if node_name == "generate_structure":
+                paras = (node_update or {}).get("paragraphs", [])
+                if paras:
+                    total_paragraphs = len(paras)
+                status_text.text(NODE_DESC.get(node_name, node_name))
+                progress_bar.progress(10)
+            elif node_name == "advance_paragraph":
+                current_idx = (node_update or {}).get("current_paragraph_index", current_idx + 1)
+                status_text.text(NODE_DESC.get(node_name, node_name))
+            elif node_name == "format_report":
+                status_text.text(NODE_DESC.get(node_name, node_name))
+                progress_bar.progress(99)
+            else:
+                frac = STAGE_FRACTION.get(node_name, 0.0)
+                overall = 10 + int(85 * (current_idx + frac) / max(total_paragraphs, 1))
+                progress_bar.progress(min(max(overall, 10), 98))
+                status_text.text(
+                    f"{NODE_DESC.get(node_name, node_name)} (段落 {current_idx + 1}/{total_paragraphs})"
+                )
+
+    return agent.graph.get_state(graph_config).values
+
+
+def execute_research(query: str, config: Settings) -> bool:
     """执行研究 (流式驱动 LangGraph, 实时更新进度)"""
+    return _run_research(query, config, thread_id=None, resume=False)
+
+
+def resume_research(query: str, thread_id: str, config: Settings) -> bool:
+    """从已有 checkpoint 继续研究。"""
+    return _run_research(query, config, thread_id=thread_id, resume=True)
+
+
+def _run_research(query: str, config: Settings, thread_id: str | None, resume: bool) -> bool:
     agent = None
     runtime_run = None
     try:
@@ -163,56 +287,41 @@ def execute_research(query: str, config: Settings):
         agent = LangGraphQueryAgent(config=config, checkpoint_dir=".checkpoints")
         progress_bar.progress(5)
 
-        # 生成 thread_id (支持后续断点恢复)
-        thread_id = f"query_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        if resume:
+            if not thread_id:
+                raise ValueError("恢复研究需要 thread_id")
+            st.caption(f"Thread ID: `{thread_id}` (正在从 checkpoint 恢复)")
+        else:
+            thread_id = f"query_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            st.caption(f"Thread ID: `{thread_id}` (checkpoint 已自动保存, 可用于断点恢复)")
         st.session_state.langgraph_thread_id = thread_id
-        st.caption(f"Thread ID: `{thread_id}` (checkpoint 已自动保存, 可用于断点恢复)")
+
+        recursion_limit = agent._calculate_recursion_limit(
+            config.MAX_REFLECTIONS,
+            config.MAX_PARAGRAPHS,
+        )
+        graph_config = {"configurable": {"thread_id": thread_id}, "recursion_limit": recursion_limit}
+        if resume and agent.checkpointer.get(graph_config) is None:
+            raise ValueError(f"未找到 thread_id={thread_id} 的 checkpoint")
+
         runtime_run = start_run(
             "query",
-            query,
+            f"resume:{query}" if resume else query,
             thread_id,
             checkpoint_path=getattr(agent, "checkpoint_path", None),
         )
         agent._active_run_id = runtime_run.get("run_id")
         agent._active_thread_id = thread_id
 
-        # 结构节点由 LLM 决定段落数(常 4-7 段), 每段约需 (2*反思次数+4) 步;
-        # LangGraph 默认 recursion_limit=25 在多段落时会中途抛 RecursionError, 这里给足余量。
-        recursion_limit = (2 * config.MAX_REFLECTIONS + 4) * 15 + 10
-        graph_config = {"configurable": {"thread_id": thread_id}, "recursion_limit": recursion_limit}
-        initial_state = create_initial_state(
-            query=query,
-            max_reflections=config.MAX_REFLECTIONS,
-            max_paragraphs=config.MAX_PARAGRAPHS,
-        )
+        initial_state = None
+        if not resume:
+            initial_state = create_initial_state(
+                query=query,
+                max_reflections=config.MAX_REFLECTIONS,
+                max_paragraphs=config.MAX_PARAGRAPHS,
+            )
 
-        # 流式驱动图 (stream_mode="updates": 每步返回 {节点名: 更新})
-        total_paragraphs = 1
-        current_idx = 0
-        for chunk in agent.graph.stream(initial_state, graph_config, stream_mode="updates"):
-            for node_name, node_update in chunk.items():
-                if node_name == "generate_structure":
-                    paras = (node_update or {}).get("paragraphs", [])
-                    if paras:
-                        total_paragraphs = len(paras)
-                    status_text.text(NODE_DESC.get(node_name, node_name))
-                    progress_bar.progress(10)
-                elif node_name == "advance_paragraph":
-                    current_idx = (node_update or {}).get("current_paragraph_index", current_idx + 1)
-                    status_text.text(NODE_DESC.get(node_name, node_name))
-                elif node_name == "format_report":
-                    status_text.text(NODE_DESC.get(node_name, node_name))
-                    progress_bar.progress(99)
-                else:
-                    frac = STAGE_FRACTION.get(node_name, 0.0)
-                    overall = 10 + int(85 * (current_idx + frac) / max(total_paragraphs, 1))
-                    progress_bar.progress(min(max(overall, 10), 98))
-                    status_text.text(
-                        f"{NODE_DESC.get(node_name, node_name)} (段落 {current_idx + 1}/{total_paragraphs})"
-                    )
-
-        # 提取最终累积状态
-        final_state = agent.graph.get_state(graph_config).values
+        final_state = _stream_graph(agent, graph_config, initial_state, progress_bar, status_text)
         final_report = final_state.get("final_report", "")
 
         progress_bar.progress(100)
@@ -223,14 +332,16 @@ def execute_research(query: str, config: Settings):
             logger.error("未生成最终报告")
             if runtime_run:
                 finish_run(runtime_run.get("run_id"), "failed", error_summary="final_report is empty")
-            return
+            return False
 
         # 保存报告
-        report_path = agent._save_report(query, final_report, thread_id)
+        report_query = final_state.get("query") or query
+        report_path = agent._save_report(report_query, final_report, thread_id)
         finish_run(runtime_run.get("run_id") if runtime_run else None, "completed", final_report_path=report_path)
 
         # 显示结果
         display_results(final_state, final_report)
+        return True
 
     except Exception as e:
         import traceback
@@ -244,6 +355,11 @@ def execute_research(query: str, config: Settings):
         logger.exception(f"研究过程中发生错误: {str(e)}")
         if runtime_run:
             finish_run(runtime_run.get("run_id"), "failed", error_summary=str(e))
+        recovery_thread_id = thread_id or st.session_state.get("langgraph_thread_id")
+        if is_recoverable_api_error(e):
+            _remember_api_recovery(query, recovery_thread_id, e, mode="resume" if recovery_thread_id else "start")
+            st.info("已保留当前进度。更新 API 配置后可以从 checkpoint 继续。")
+        return False
     finally:
         if agent is not None:
             agent._active_run_id = None
