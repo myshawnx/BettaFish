@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     PORTFOLIO_DEMO_MODE: bool = Field(True, description="作品集演示模式，默认使用可复现样例数据与本地演示路径")
     ENABLE_LIVE_CRAWLERS: bool = Field(False, description="是否启用 MindSpider/MediaCrawler 实时爬虫集成，默认关闭")
 
+    # ================== 相关性过滤器配置 ====================
+    ENABLE_RELEVANCE_FILTER: bool = Field(True, description="启用搜索相关性过滤器，防止搜索幻觉和无关结果混入。设置为 true 启用，false 禁用（默认启用）")
+
     # ====================== 数据库配置 ======================
     DB_DIALECT: str = Field("postgresql", description="数据库类型，可选 mysql 或 postgresql；请与其他连接信息同时配置")
     DB_HOST: str = Field("your_db_host", description="数据库主机，例如localhost 或 127.0.0.1")
