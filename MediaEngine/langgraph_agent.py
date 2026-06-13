@@ -45,6 +45,7 @@ from .nodes import (
 from .tools import BochaMultimodalSearch, BochaResponse, AnspireAISearch, AnspireResponse
 from .utils import format_search_results_for_prompt
 from .utils.config import Settings, settings
+from utils.relevance_filter import get_relevance_filter
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
@@ -78,6 +79,9 @@ class LangGraphMediaAgent:
         """
         self.config = config or settings
         self.checkpoint_dir = checkpoint_dir
+
+        # 初始化相关性过滤器
+        self.relevance_filter = get_relevance_filter()
 
         # 初始化LLM客户端 (MEDIA_ENGINE_* 优先, 回退 MINDSPIDER_*)
         self.llm_client = LLMClient(
@@ -323,6 +327,15 @@ class LangGraphMediaAgent:
             search_tool = search_output.get("search_tool", "comprehensive_search")
             search_kwargs = self._prepare_search_kwargs(search_tool)
 
+            # L1: 锚定核心实体到search_query
+            original_query = state["query"]
+            anchored_query, was_anchored = self.relevance_filter.enforce_core_entities(
+                search_query, original_query
+            )
+            if was_anchored:
+                logger.warning(f"[L1] query已锚定: '{search_query}' -> '{anchored_query}'")
+                search_query = anchored_query
+
             logger.info(f"搜索查询: {search_query}")
             logger.info(f"使用工具: {search_tool}")
 
@@ -331,6 +344,20 @@ class LangGraphMediaAgent:
 
             # 转换结果
             search_results = self._convert_search_results(search_response)
+
+            # L2: 过滤搜索结果
+            filtered_results, filter_stats = self.relevance_filter.filter_search_results(
+                search_results,
+                original_query,
+                min_match=1,
+                safety_floor=0.34
+            )
+            if filter_stats.get("filtered"):
+                logger.info(
+                    f"[L2] 结果过滤: {filter_stats['input_count']}→{filter_stats['kept_count']} "
+                    f"(保留率{filter_stats['retention_rate']*100:.0f}%)"
+                )
+                search_results = filtered_results
 
             logger.info(f"找到 {len(search_results)} 个结果")
 
@@ -418,11 +445,34 @@ class LangGraphMediaAgent:
             search_tool = reflection_output.get("search_tool", "comprehensive_search")
             search_kwargs = self._prepare_search_kwargs(search_tool)
 
+            # L1: 锚定核心实体到反思search_query
+            original_query = state["query"]
+            anchored_query, was_anchored = self.relevance_filter.enforce_core_entities(
+                search_query, original_query
+            )
+            if was_anchored:
+                logger.warning(f"[L1反思] query已锚定: '{search_query}' -> '{anchored_query}'")
+                search_query = anchored_query
+
             logger.info(f"反思查询: {search_query}")
 
             # 执行反思搜索
             search_response = self._execute_search_tool(search_tool, search_query, search_kwargs)
             search_results = self._convert_search_results(search_response)
+
+            # L2: 过滤反思搜索结果
+            filtered_results, filter_stats = self.relevance_filter.filter_search_results(
+                search_results,
+                original_query,
+                min_match=1,
+                safety_floor=0.34
+            )
+            if filter_stats.get("filtered"):
+                logger.info(
+                    f"[L2反思] 结果过滤: {filter_stats['input_count']}→{filter_stats['kept_count']} "
+                    f"(保留率{filter_stats['retention_rate']*100:.0f}%)"
+                )
+                search_results = filtered_results
 
             logger.info(f"反思搜索找到 {len(search_results)} 个结果")
 
