@@ -142,6 +142,40 @@ def test_query_search_failure_placeholder_raises_for_recovery():
         agent._execute_search_tool("basic_search_news", "topic", {})
 
 
+def test_query_search_by_date_expands_same_day_range_for_tavily():
+    from QueryEngine.langgraph_agent import LangGraphQueryAgent
+
+    agent = object.__new__(LangGraphQueryAgent)
+
+    search_tool, kwargs = agent._prepare_search_kwargs(
+        {
+            "start_date": "2026-06-13",
+            "end_date": "2026-06-13",
+        },
+        "search_news_by_date",
+    )
+
+    assert search_tool == "search_news_by_date"
+    assert kwargs == {"start_date": "2026-06-13", "end_date": "2026-06-14"}
+
+
+def test_query_search_by_date_reversed_range_falls_back_to_basic_search():
+    from QueryEngine.langgraph_agent import LangGraphQueryAgent
+
+    agent = object.__new__(LangGraphQueryAgent)
+
+    search_tool, kwargs = agent._prepare_search_kwargs(
+        {
+            "start_date": "2026-06-14",
+            "end_date": "2026-06-13",
+        },
+        "search_news_by_date",
+    )
+
+    assert search_tool == "basic_search_news"
+    assert kwargs == {}
+
+
 def test_data_inspection_error_is_not_retryable():
     from utils.retry_helper import _is_non_retryable_exception, is_recoverable_api_error
 

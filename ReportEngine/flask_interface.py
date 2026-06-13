@@ -406,10 +406,11 @@ class ReportTask:
 
 def check_engines_ready() -> Dict[str, Any]:
     """
-    检查三个子引擎是否都有新文件。
+    检查三个子引擎是否都有可用于总报告的文件。
 
-    调用 ReportAgent 的基准检测逻辑，并附带论坛日志存在性，
-    是 /status、/generate 的前置校验。
+    调用 ReportAgent 的基准检测逻辑，并附带论坛日志存在性。
+    正常全流程要求三引擎都有新增报告；checkpoint 恢复场景允许复用
+    其他引擎已经生成的最新报告。
     """
     directories = {
         'insight': 'insight_engine_streamlit_reports',
@@ -591,6 +592,7 @@ def get_status():
             'engines_ready': engines_status['ready'],
             'files_found': engines_status.get('files_found', []),
             'missing_files': engines_status.get('missing_files', []),
+            'using_latest_fallback': engines_status.get('using_latest_fallback', False),
             'current_task': current_task.to_dict() if current_task else None
         })
     except Exception as e:

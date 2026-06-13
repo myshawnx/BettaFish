@@ -59,6 +59,16 @@ def test_main_page_and_status_endpoints_render_without_startup(monkeypatch):
     assert report_response.is_json
 
 
+def test_query_streamlit_exposes_checkpoint_resume_entrypoint():
+    source = (PROJECT_ROOT / "SingleEngineApp" / "query_engine_langgraph_streamlit_app.py").read_text()
+
+    assert "resume_thread_id" in source
+    assert "从 checkpoint 手动恢复" in source
+    assert "从 checkpoint 继续" in source
+    assert "resume_requested = st.button" in source
+    assert source.index("if not resume_requested") < source.index("resume_research(resume_query.strip()")
+
+
 def test_system_start_uses_optional_crawler_demo_path(monkeypatch):
     flask_app = load_app(monkeypatch)
 

@@ -1,4 +1,6 @@
+import tempfile
 import unittest
+from pathlib import Path
 
 from ReportEngine.ir import IRValidator
 from ReportEngine.nodes.chapter_generation_node import ChapterGenerationNode
@@ -163,6 +165,45 @@ class ChapterSanitizationTestCase(unittest.TestCase):
         valid, errors = validator.validate_chapter(chapter)
         self.assertFalse(valid)
         self.assertTrue(any("title 必须与engine一致" in err for err in errors))
+
+    def test_input_check_reuses_latest_reports_after_single_engine_resume(self):
+        from ReportEngine.agent import FileCountBaseline, ReportAgent
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            insight_dir = root / "insight"
+            media_dir = root / "media"
+            query_dir = root / "query"
+            for directory in (insight_dir, media_dir, query_dir):
+                directory.mkdir()
+
+            (insight_dir / "insight_report.md").write_text("insight", encoding="utf-8")
+            (media_dir / "media_report.md").write_text("media", encoding="utf-8")
+            (query_dir / "query_old.md").write_text("old", encoding="utf-8")
+            (query_dir / "query_resumed.md").write_text("resumed", encoding="utf-8")
+            forum_log = root / "forum.log"
+            forum_log.write_text("moderator verdict", encoding="utf-8")
+
+            baseline = object.__new__(FileCountBaseline)
+            baseline.baseline_data = {"insight": 1, "media": 1, "query": 1}
+
+            agent = object.__new__(ReportAgent)
+            agent.file_baseline = baseline
+
+            result = agent.check_input_files(
+                str(insight_dir),
+                str(media_dir),
+                str(query_dir),
+                str(forum_log),
+            )
+
+        self.assertTrue(result["ready"])
+        self.assertTrue(result["using_latest_fallback"])
+        self.assertEqual(result["missing_files"], [])
+        self.assertIn("insight", result["latest_files"])
+        self.assertIn("media", result["latest_files"])
+        self.assertIn("query", result["latest_files"])
+        self.assertTrue(any("复用最新文件" in item for item in result["files_found"]))
 
 
 if __name__ == "__main__":

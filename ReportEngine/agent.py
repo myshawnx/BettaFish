@@ -1449,21 +1449,27 @@ class ReportAgent:
             'query': query_dir
         }
         
-        # 使用文件基准管理器检查新文件
+        # 使用文件基准管理器检查新文件。
+        # 若某个 engine 是从 checkpoint 单独恢复的，其他 engine 可能已经在
+        # 当前主题中生成过文件，但不再表现为“基准之后的新增”。因此这里同时
+        # 支持“所有引擎都有新增”和“所有引擎都有最新可用报告”两种就绪路径。
         check_result = self.file_baseline.check_new_files(directories)
+        latest_files = self.file_baseline.get_latest_files(directories)
+        all_engines_have_latest = all(engine in latest_files for engine in directories)
         
         # 检查论坛日志
         forum_ready = os.path.exists(forum_log_path)
         
         # 构建返回结果
         result = {
-            'ready': check_result['ready'] and forum_ready,
+            'ready': (check_result['ready'] or all_engines_have_latest) and forum_ready,
             'baseline_counts': check_result['baseline_counts'],
             'current_counts': check_result['current_counts'],
             'new_files_found': check_result['new_files_found'],
             'missing_files': [],
             'files_found': [],
-            'latest_files': {}
+            'latest_files': {},
+            'using_latest_fallback': not check_result['ready'] and all_engines_have_latest
         }
         
         # 构建详细信息
@@ -1473,6 +1479,9 @@ class ReportAgent:
             
             if new_count > 0:
                 result['files_found'].append(f"{engine}: {current_count}个文件 (新增{new_count}个)")
+            elif engine in latest_files:
+                latest_name = os.path.basename(latest_files[engine])
+                result['files_found'].append(f"{engine}: {current_count}个文件 (复用最新文件: {latest_name})")
             else:
                 result['missing_files'].append(f"{engine}: {current_count}个文件 (基准{baseline_count}个，无新增)")
         
@@ -1484,7 +1493,7 @@ class ReportAgent:
         
         # 获取最新文件路径（用于实际报告生成）
         if result['ready']:
-            result['latest_files'] = self.file_baseline.get_latest_files(directories)
+            result['latest_files'] = latest_files
             if forum_ready:
                 result['latest_files']['forum'] = forum_log_path
         

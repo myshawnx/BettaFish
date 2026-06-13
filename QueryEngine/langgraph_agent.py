@@ -17,7 +17,7 @@ import os
 import sqlite3
 import re
 from typing import Dict, Any, List, Literal, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from loguru import logger
 
 from langgraph.graph import StateGraph, END
@@ -692,6 +692,17 @@ class LangGraphQueryAgent:
         except ValueError:
             return False
 
+    def _normalize_tavily_date_range(self, start_date: str, end_date: str):
+        """Return a Tavily-compatible date range, or None when invalid."""
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d").date()
+
+        if end_dt < start_dt:
+            return None
+        if end_dt == start_dt:
+            end_dt = start_dt + timedelta(days=1)
+        return start_dt.isoformat(), end_dt.isoformat()
+
     def _prepare_search_kwargs(self, search_output: Dict, search_tool: str):
         """
         为search_news_by_date准备并校验日期参数
@@ -713,9 +724,21 @@ class LangGraphQueryAgent:
 
             if start_date and end_date and \
                     self._validate_date_format(start_date) and self._validate_date_format(end_date):
-                search_kwargs["start_date"] = start_date
-                search_kwargs["end_date"] = end_date
-                logger.info(f"时间范围: {start_date} 到 {end_date}")
+                normalized_range = self._normalize_tavily_date_range(start_date, end_date)
+                if normalized_range:
+                    normalized_start, normalized_end = normalized_range
+                    search_kwargs["start_date"] = normalized_start
+                    search_kwargs["end_date"] = normalized_end
+                    logger.info(
+                        f"时间范围: {normalized_start} 到 {normalized_end}"
+                        f"{' (同日查询已扩展到次日)' if start_date == end_date else ''}"
+                    )
+                else:
+                    logger.info(
+                        f"search_news_by_date日期范围无效(end_date早于start_date), 改用基础搜索: "
+                        f"start_date={start_date}, end_date={end_date}"
+                    )
+                    search_tool = "basic_search_news"
             else:
                 logger.info(
                     f"search_news_by_date日期缺失或格式错误(应为YYYY-MM-DD), 改用基础搜索: "

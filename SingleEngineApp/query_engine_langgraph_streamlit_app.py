@@ -151,11 +151,13 @@ def main():
         query_params = st.query_params
         auto_query = query_params.get('query', '')
         auto_search = query_params.get('auto_search', 'false').lower() == 'true'
+        resume_thread_id = query_params.get('resume_thread_id', '')
     except AttributeError:
         # 兼容旧版本
         query_params = st.experimental_get_query_params()
         auto_query = query_params.get('query', [''])[0]
         auto_search = query_params.get('auto_search', ['false'])[0].lower() == 'true'
+        resume_thread_id = query_params.get('resume_thread_id', [''])[0]
 
     # 如果有自动查询，使用它作为默认值，否则显示占位符
     display_query = auto_query if auto_query else "等待从主页面接收分析内容..."
@@ -172,20 +174,30 @@ def main():
 
     # 自动搜索逻辑
     start_research = False
+    start_resume = False
     query = auto_query
 
-    if auto_search and auto_query and 'auto_search_executed' not in st.session_state:
+    if resume_thread_id and auto_query and 'resume_search_executed' not in st.session_state:
+        st.session_state.resume_search_executed = True
+        start_resume = True
+    elif auto_search and auto_query and 'auto_search_executed' not in st.session_state:
         st.session_state.auto_search_executed = True
         start_research = True
     elif auto_query and not auto_search:
         st.warning("等待搜索启动信号...")
 
+    render_manual_checkpoint_resume(default_query=auto_query, default_thread_id=resume_thread_id)
+
     # 验证配置
-    if start_research:
+    if start_research or start_resume:
         _clear_api_recovery()
         if not query.strip():
             st.error("请输入研究查询")
             logger.error("请输入研究查询")
+            return
+        if start_resume and not resume_thread_id.strip():
+            st.error("恢复研究需要 resume_thread_id")
+            logger.error("恢复研究需要 resume_thread_id")
             return
 
         missing = []
@@ -199,10 +211,39 @@ def main():
             st.error(message)
             logger.error(message)
             _remember_api_recovery(query, None, message, mode="start")
+        elif start_resume:
+            resume_research(query, resume_thread_id.strip(), build_query_config())
         else:
             execute_research(query, build_query_config())
 
     render_pending_api_recovery()
+
+
+def render_manual_checkpoint_resume(default_query: str = "", default_thread_id: str = ""):
+    """Render a manual checkpoint resume form for browser/session restarts."""
+    resume_requested = False
+    with st.expander("从 checkpoint 手动恢复", expanded=bool(default_thread_id)):
+        resume_query = st.text_input(
+            "恢复查询",
+            value=default_query or "",
+            key="query_manual_resume_query",
+        )
+        resume_thread_id = st.text_input(
+            "Checkpoint Thread ID",
+            value=default_thread_id or st.session_state.get("langgraph_thread_id", ""),
+            key="query_manual_resume_thread_id",
+        )
+        resume_requested = st.button("从 checkpoint 继续", key="query_manual_resume_button")
+
+    if not resume_requested:
+        return
+
+    if not resume_query.strip() or not resume_thread_id.strip():
+        st.error("恢复查询和 Thread ID 都不能为空")
+        return
+
+    _clear_api_recovery()
+    resume_research(resume_query.strip(), resume_thread_id.strip(), build_query_config())
 
 
 def render_pending_api_recovery():
