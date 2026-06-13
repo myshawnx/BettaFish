@@ -42,6 +42,23 @@ class DummyFormattingLLM:
         return "# OK\n\nFormatted report."
 
 
+class DummyManualReportFormatter:
+    def __init__(self):
+        self.run_called = False
+        self.manual_called = False
+
+    def run(self, input_data):
+        self.run_called = True
+        return "# TRUNCATED\n\nThis would lose later sections."
+
+    def format_report_manually(self, paragraphs_data, report_title="深度研究报告"):
+        self.manual_called = True
+        lines = [f"# {report_title}"]
+        for paragraph in paragraphs_data:
+            lines.append(paragraph["paragraph_latest_state"])
+        return "\n\n".join(lines)
+
+
 class FailedTavilyAgency:
     def basic_search_news(self, query, max_results=7):
         from QueryEngine.tools import TavilyResponse
@@ -212,6 +229,38 @@ def test_langgraph_recursion_limit_scales_with_configured_paragraphs(
 
     assert agent_class._calculate_recursion_limit(max_reflections=2, max_paragraphs=20) > 130
     assert agent_class._calculate_recursion_limit(max_reflections=2, max_paragraphs=5) >= 200
+
+
+@pytest.mark.parametrize(("agent_module_name", "state_module_name", "agent_class_name"), LANGGRAPH_ENGINES)
+def test_langgraph_report_formatting_preserves_all_sections_by_default(
+    monkeypatch,
+    agent_module_name,
+    state_module_name,
+    agent_class_name,
+):
+    monkeypatch.delenv("LANGGRAPH_REPORT_LLM_FORMATTING", raising=False)
+    agent_module = importlib.import_module(agent_module_name)
+    state_module = importlib.import_module(state_module_name)
+    agent = object.__new__(getattr(agent_module, agent_class_name))
+    formatter = DummyManualReportFormatter()
+    agent.report_formatting_node_impl = formatter
+
+    first_section = "FIRST_SECTION_COMPLETE_CONTENT_" + ("A" * 2000)
+    second_section = "SECOND_SECTION_COMPLETE_CONTENT_" + ("B" * 2000)
+    state = state_module.create_initial_state("topic", max_reflections=0, max_paragraphs=2)
+    state["report_title"] = "Complete LangGraph Report"
+    state["paragraphs"] = [
+        {"title": "First", "content": "scope", "latest_summary": first_section},
+        {"title": "Second", "content": "scope", "latest_summary": second_section},
+    ]
+
+    update = agent._format_report_node(state)
+
+    assert formatter.manual_called is True
+    assert formatter.run_called is False
+    assert update["is_completed"] is True
+    assert first_section in update["final_report"]
+    assert second_section in update["final_report"]
 
 
 @pytest.mark.parametrize("formatting_module_name", FORMATTING_NODES)

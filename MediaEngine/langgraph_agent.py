@@ -47,6 +47,14 @@ from .utils import format_search_results_for_prompt
 from .utils.config import Settings, settings
 
 
+def _env_flag(name: str, default: bool = False) -> bool:
+    """Parse a boolean environment flag."""
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 class LangGraphMediaAgent:
     """
     基于LangGraph的MediaEngine Agent (默认 Bocha 多模态搜索后端)
@@ -523,7 +531,18 @@ class LangGraphMediaAgent:
             })
 
         try:
-            # 格式化报告
+            if not _env_flag("LANGGRAPH_REPORT_LLM_FORMATTING", default=False):
+                final_report = self.report_formatting_node_impl.format_report_manually(
+                    report_data, state["report_title"]
+                )
+                logger.info("最终报告已使用确定性拼接生成")
+                return {
+                    "final_report": final_report,
+                    "is_completed": True,
+                    "messages": ["最终报告生成完成(确定性拼接)"]
+                }
+
+            # 可选 LLM 润色路径。默认关闭，避免整份报告被 max_tokens 截断。
             final_report = self.report_formatting_node_impl.run(report_data)
 
             logger.info("最终报告生成完成")
