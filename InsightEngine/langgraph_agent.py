@@ -46,6 +46,7 @@ from .nodes import (
 from .tools import MediaCrawlerDB, keyword_optimizer, multilingual_sentiment_analyzer
 from .utils import format_search_results_for_prompt
 from .utils.config import Settings, settings
+from utils.relevance_filter import get_relevance_filter
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
@@ -77,6 +78,9 @@ class LangGraphInsightAgent:
         """
         self.config = config or settings
         self.checkpoint_dir = checkpoint_dir
+
+        # 初始化相关性过滤器
+        self.relevance_filter = get_relevance_filter()
 
         # 初始化LLM客户端
         self.llm_client = LLMClient(
@@ -332,6 +336,15 @@ class LangGraphInsightAgent:
             search_query = search_output["search_query"]
             search_tool = search_output.get("search_tool", "search_topic_globally")
 
+            # L1: 锚定核心实体到search_query (原始query作为topic)
+            original_query = state["query"]
+            anchored_query, was_anchored = self.relevance_filter.enforce_core_entities(
+                search_query, original_query
+            )
+            if was_anchored:
+                logger.warning(f"[L1] query已锚定: '{search_query}' -> '{anchored_query}'")
+                search_query = anchored_query
+
             logger.info(f"搜索查询: {search_query}")
             logger.info(f"使用工具: {search_tool}")
 
@@ -340,6 +353,27 @@ class LangGraphInsightAgent:
 
             # 转换结果
             search_results = self._convert_search_results(search_response)
+
+            # L2: 过滤搜索结果 (保留与原始query核心实体相关的结果)
+            filtered_results, filter_stats = self.relevance_filter.filter_search_results(
+                search_results,
+                original_query,
+                min_match=1,
+                safety_floor=0.34
+            )
+            if filter_stats.get("filtered"):
+                logger.info(
+                    f"[L2] 结果过滤: {filter_stats['input_count']}→{filter_stats['kept_count']} "
+                    f"(保留率{filter_stats['retention_rate']*100:.0f}%)"
+                )
+                search_results = filtered_results
+
+            # L4: 空结果友好提示
+            if len(search_results) == 0:
+                logger.error(
+                    f"[L4] 段落{idx+1}搜索无结果。InsightEngine依赖数据库数据，"
+                    f"若数据库为空或无相关数据，无法生成有效分析。"
+                )
 
             logger.info(f"找到 {len(search_results)} 个结果")
 
@@ -442,11 +476,41 @@ class LangGraphInsightAgent:
             search_query = reflection_output["search_query"]
             search_tool = reflection_output.get("search_tool", "search_topic_globally")
 
+            # L1: 锚定核心实体到反思search_query
+            original_query = state["query"]
+            anchored_query, was_anchored = self.relevance_filter.enforce_core_entities(
+                search_query, original_query
+            )
+            if was_anchored:
+                logger.warning(f"[L1反思] query已锚定: '{search_query}' -> '{anchored_query}'")
+                search_query = anchored_query
+
             logger.info(f"反思查询: {search_query}")
 
             # 执行反思搜索
             search_response = self._execute_search_tool(search_tool, search_query, {})
             search_results = self._convert_search_results(search_response)
+
+            # L2: 过滤反思搜索结果
+            filtered_results, filter_stats = self.relevance_filter.filter_search_results(
+                search_results,
+                original_query,
+                min_match=1,
+                safety_floor=0.34
+            )
+            if filter_stats.get("filtered"):
+                logger.info(
+                    f"[L2反思] 结果过滤: {filter_stats['input_count']}→{filter_stats['kept_count']} "
+                    f"(保留率{filter_stats['retention_rate']*100:.0f}%)"
+                )
+                search_results = filtered_results
+
+            # L4: 反思搜索空结果提示
+            if len(search_results) == 0:
+                logger.warning(
+                    f"[L4] 段落{idx+1}反思搜索无结果。"
+                    f"数据库可能缺少相关深化数据。"
+                )
 
             logger.info(f"反思搜索找到 {len(search_results)} 个结果")
 
@@ -713,6 +777,21 @@ class LangGraphInsightAgent:
 
         # 去重
         unique_results = self._deduplicate_results(all_results)
+
+        # L4: 检测空库或数据过少
+        result_count = len(unique_results)
+        if result_count == 0:
+            logger.warning(
+                f"[L4空库警告] InsightEngine数据库无'{query}'相关数据。"
+                f"InsightEngine默认无爬虫，数据库为空或数据量极少时搜索结果为空。"
+                f"建议：(1)运行爬虫填充数据库 (2)使用MediaEngine或QueryEngine替代"
+            )
+        elif result_count < 3:
+            logger.warning(
+                f"[L4数据过少] InsightEngine仅找到{result_count}条相关数据，"
+                f"可能因数据库数据量不足导致分析质量下降。"
+                f"建议运行爬虫或使用其他引擎。"
+            )
 
         # 构建响应
         from .tools import DBResponse
