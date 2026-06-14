@@ -531,7 +531,7 @@ class ReportAgent:
             # IR/渲染需要的全局元数据，带上设计稿给出的标题/主题/目录/篇幅信息
             manifest_meta = {
                 "query": query,
-                "title": layout_design.get("title") or (f"{query} - 舆情洞察报告" if query else template_result.get("template_name")),
+                "title": layout_design.get("title") or f"{query} - 舆情洞察报告",
                 "subtitle": layout_design.get("subtitle"),
                 "tagline": layout_design.get("tagline"),
                 "templateName": template_result.get("template_name"),
@@ -1249,7 +1249,7 @@ class ReportAgent:
                 return stripped.lstrip("#").strip()
             if stripped:
                 fallback = fallback or stripped
-        return fallback or "智能舆情分析报告"
+        return fallback or "舆情分析报告"
     
     def _get_fallback_template_content(self) -> str:
         """
